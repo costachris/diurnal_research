@@ -19,6 +19,7 @@ import diurnal_config
 
 from diurnal_utils import *
 from fetch_model_helper import *
+# %run fetch_model_helper.py
 
 
 # # Notebook for exploring local CMIP6 data downloaded with `cmip6_downloader.py`
@@ -26,19 +27,20 @@ from fetch_model_helper import *
 # In[2]:
 
 
-cmip_identifier = 'CMIP6'
-start_date = '1985-01'
-# end_date = '1986-01'
-end_date = '2006-01'
 
-# cmip_identifier = 'CMIP5'
+
+# cmip_identifier = 'CMIP6'
 # start_date = '1985-01'
 # end_date = '2006-01'
+
+cmip_identifier = 'CMIP5'
+start_date = '1985-01'
+end_date = '2006-01'
 
 #TODO overwrite_existing_files = False
 
 
-# In[3]:
+# In[22]:
 
 
 # get all available model names
@@ -48,13 +50,17 @@ unique_cmip6_models = get_unique_models(rel_cmip6_path)
 unique_cmip5_models = get_unique_models(rel_cmip5_path)
 
 
-# In[3]:
+# In[19]:
 
 
-cmip6_model_names = diurnal_config.cmip6_to_cmip5_map.keys()
-cmip5_model_names = diurnal_config.cmip6_to_cmip5_map.values()
+# unique_cmip6_models
 
 
+# In[8]:
+
+
+# cmip6_model_names = diurnal_config.cmip6_to_cmip5_map.keys()
+# cmip5_model_names = diurnal_config.cmip6_to_cmip5_map.values()
 
 if cmip_identifier == 'CMIP6':
 #     all_model_names = list(cmip6_model_names)
@@ -68,10 +74,12 @@ elif cmip_identifier == 'CMIP5':
     
 
 
-# In[ ]:
+# In[20]:
 
 
-
+# get_path_to_desired_model_cmip6(cmip_rel_dir, 
+#                                   desired_model= 'CanESM5',
+#                                   desired_grid_types = ('gn', 'gr', 'gr1'))
 
 
 # In[4]:
@@ -100,10 +108,12 @@ for model_name in list(all_model_names):
             if cmip_identifier == 'CMIP6':
                 path_to_cmip_files =  get_path_to_desired_model_cmip6(cmip_rel_dir, 
                                       desired_model= model_name,
-                                      desired_grid_types = ('gn', 'gr', 'gr1'))
+                                      desired_ensemble_member = ('r1i1p1f1', 'r1i1p2f1','r1i1p1f2'),
+                                      desired_grid_types = ('gn', 'gr', 'gr1', 'gr2'))
             elif cmip_identifier == 'CMIP5':
                 path_to_cmip_files = get_path_to_desired_model_cmip5(cmip_rel_dir, 
-                                  desired_model=model_name)
+                                  desired_model=model_name,
+                                  desired_ensemble_member = ('r1i1p1','r6i1p1','r2i1p1'))
             # subset lat/lon and time
             print('Opening data...')
             ds = xr.open_mfdataset(path_to_cmip_files, combine='by_coords')
@@ -118,7 +128,10 @@ for model_name in list(all_model_names):
                                                     field_id = 'pr', 
                                                     grid_time_resolution_hours = 3,
                                                     time_resolution_hours = 1)
-
+            # add some metadata 
+            out_ds.attrs['input_dataset_paths'] = path_to_cmip_files
+            out_ds_means.attrs['input_dataset_paths'] = path_to_cmip_files
+            
             # save results 
             print('Saving results... ')
             out_ds.to_netcdf(save_output_path)
