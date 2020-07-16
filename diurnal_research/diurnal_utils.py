@@ -208,9 +208,12 @@ def compute_lst_array(ds,
     lst_times = np.empty(ds[field_id].shape).astype(np.float32)
 
     for time_ind in tqdm(range(len(ds[time_id]))):
-        if type(ds['time'][0].item()) == cftime._cftime.DatetimeNoLeap:
+        # note: for diurnal analysis we don't really care about year, month, day: just hour
+        if (type(ds['time'][0].item()) == cftime._cftime.DatetimeNoLeap) | \
+            (type(ds['time'][0].item()) == cftime._cftime.Datetime360Day):
+#             dt_i = datetime.strptime(str(ds.isel(time = time_ind)[time_id].values.item()), '%Y-%m-%d %H:%M:%S')
+            dt_i = ds.isel(time = time_ind)[time_id].values.item()
             
-            dt_i = datetime.strptime(str(ds.isel(time = time_ind)[time_id].values.item()), '%Y-%m-%d %H:%M:%S')
         else:
             dt_i = datetime.utcfromtimestamp(ds[time_id][time_ind].item() * 1e-9)
         
@@ -354,9 +357,7 @@ def diurnal_analysis(ds, field_id, grid_time_resolution_hours = 3, time_resoluti
     
 ##### Utility functions for plotting results 
 
-def make_four_panel(field_dict, 
-                    lats,
-                    lons, 
+def make_four_panel(season_ds, 
                     title = r'$\Phi$',
                     axis = None,
                     cmap = plt.get_cmap('twilight'),
@@ -364,7 +365,8 @@ def make_four_panel(field_dict,
                     vmax = None,
                     save_fig_path = None):
     ''' Make 4 panel plot. '''
-
+    lats = season_ds['lat'].values
+    lons = season_ds['lon'].values
     
     def set_axis(ax, axis_list = axis):
         ax.set_xlim(axis_list[:2])
@@ -375,10 +377,10 @@ def make_four_panel(field_dict,
     seasons = ['DJF', 'MAM', 'JJA', 'SON']
     
     for ii in range(len(axes.flat)):
-        if seasons[ii] in field_dict:
+        if seasons[ii] in season_ds['season']:
             m = Basemap(ax=axes.flat[ii], llcrnrlon = lons[0] , 
                 llcrnrlat = lats[0], urcrnrlon = lons[-1], urcrnrlat = lats[-1])
-            im = m.pcolormesh(lons, lats, field_dict[seasons[ii]], cmap = cmap, vmin = vmin, vmax = vmax)
+            im = m.pcolormesh(lons, lats, season_ds.sel(season = seasons[ii]).values, cmap = cmap, vmin = vmin, vmax = vmax)
 
             m.drawcoastlines()
 
