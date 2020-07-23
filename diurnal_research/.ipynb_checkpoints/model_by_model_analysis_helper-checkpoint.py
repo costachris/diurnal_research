@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from scipy.stats import circmean, circstd
+from scipy.stats import circmean, circstd, mode
 
 from mpl_toolkits.basemap import Basemap
 import taylorDiagram
@@ -47,16 +47,87 @@ def sin_hour(hours):
 def ampl_weighted_mean_func(df):
     return (df['precip_weights']*df['ampl_season']).sum()
 
+def mode_apply(df):
+    '''Scipy mode returns both mode and counts, os wrap function to only return mode. '''
+    return mode(df)[0].item()
 
 
+### filtering functions for pd.DataFrames 
+def filter_by_lat(df, min_lat, max_lat, absolute_value = False):
+    '''Filter pd.DataFrame by lat. 
+    Args
+    -------
+    
+    absolute_value - bool
+        use absolute value of min/max lat to filter. Ie. if
+        min_lat = 35 and max_lat = 60, find regions in both northern
+        and southern hemisphere. (35 to 60 & -35 to -60). 
+    '''
+    
+    df = df.reset_index(['lat','lon'])
+    
+    if absolute_value:
+        return df[(abs(df['lat'])>= min_lat) & (abs(df['lat']) <= max_lat)]
+
+    else:
+        return df[(df['lat']>= min_lat) & (df['lat'] <= max_lat)]
+
+    
+####### ds operators 
+def _get_mean_field(data_dir,
+                    field_name = 'rlut',
+                    file_name = '1985-01_2006-01_mean.nc',
+                    filter_lat = False,
+                    **kwargs):
+    '''Given path to cmip files (with subdirs for each model),
+    take mean of each model and return dict.
+    Args
+    -----
+    data_dir - str
+        dir containing cmip models in folders
+        
+        filter_lat - bool
+            whether or not to filter by lat. 
+            
+        **kwargs
+            keyword arguments to be past to lat filtering function
+            (filter_by_lat)
+    
+    '''
+    rad_dict = {}
+
+    model_names = os.listdir(data_dir)
+    for model_name in model_names:
+        try:
+            ds_field = xr.open_dataset(data_dir + model_name + '/' + file_name)
+            
+            if filter_lat:
+                df_field = ds_field.to_dataframe()
+                df_field_filtered = filter_by_lat(df_field, **kwargs)
+                rad_dict[model_name] = df_field_filtered[field_name].mean()
+                
+            else:
+                rad_dict[model_name] = ds_field[field_name].mean().item()
+            
+
+        except Exception as e: 
+            print('Could not process ', model_name, ' ', str(e))
+    
+    return rad_dict
+
+    
+    
 # compute stats on df containing indicies 
 
 def compute_stats(df_for_stats,
                  df_for_stats_true,
                  field = 'phase_season',
+                 agg_method = 'mean',
                  additional_stats = True, 
                  ecs_dict = None,
-                 tcr_dict = None):
+                 tcr_dict = None,
+                 rlut_dict = None,
+                 rsut_dict = None):
     '''Given pd.DataFrames containing cmip model and satellite diurnal cycle indicies, compute various error statistics
     and return dataframe. Circular statistics are used for the phase field.
     
@@ -68,6 +139,9 @@ def compute_stats(df_for_stats,
             Dataframe containing data to validate agaisnt. 
         
         field - str
+        
+        agg_method - str in {'mean', 'mode'}
+            method for aggregating field. Means are circular for phase. 
         
         additional_stats - bool
             #TODO: right now this has to be true!
@@ -84,10 +158,21 @@ def compute_stats(df_for_stats,
     '''
     model_error_stats = {}
     
-
-    mean_field_by_model = df_for_stats.groupby('model_name').mean()
-    circmean_phase_by_model = df_for_stats[['phase_season', 'model_name']].groupby('model_name').apply(phase_circmean)
-
+    # subset columns before doing pandas aggreations to speed up calculations
+    _variables_of_interest = ['ampl_season', 'model_name']
+    phase_bin_precision = 1
+    ampl_bin_precision = 3
+    
+    if agg_method == 'mean':
+    #     mean_field_by_model = df_for_stats.groupby('model_name').mean()
+        agg_field_by_model = df_for_stats.groupby('model_name').mean()
+    #     circmean_phase_by_model = df_for_stats[['phase_season', 'model_name']].groupby('model_name').apply(phase_circmean)
+        agg_phase_by_model = df_for_stats[['phase_season', 'model_name']].groupby('model_name').agg(phase_circmean)
+    
+    elif agg_method == 'mode':
+        agg_field_by_model = df_for_stats[_variables_of_interest].round(ampl_bin_precision).groupby('model_name').agg(mode_apply)
+        
+        agg_phase_by_model = df_for_stats[['phase_season', 'model_name']].round(phase_bin_precision).groupby('model_name').agg(mode_apply)
 
     for model_name, df_i in df_for_stats.groupby('model_name'):
         
@@ -104,30 +189,43 @@ def compute_stats(df_for_stats,
         # To Do
         if additional_stats == True:
          # use regular mean
-            ampl_mean = mean_field_by_model['ampl_season'][model_name]
+#             ampl_mean = mean_field_by_model['ampl_season'][model_name]
+            ampl_mean = agg_field_by_model['ampl_season'][model_name]
 
             # use precip weighted mean 
 #                 ampl_weighted_mean = ampl_weighted_mean_df[model_name]
-            phase_mean = circmean_phase_by_model[model_name]
-    
-            if model_name in ecs_dict:
+            phase_mean = agg_phase_by_model['phase_season'][model_name]
+            
+        
+            if (not ecs_dict is None) & (model_name in ecs_dict):
                 ecs_i = ecs_dict[model_name]
             else:
                 ecs_i = np.nan
                 
-            if model_name in tcr_dict:
+            if (not tcr_dict is None) & (model_name in tcr_dict):
                 tcr_i = tcr_dict[model_name]
             else:
                 tcr_i = np.nan
-#                 ampl_mean = np.nan
-#                 phase_mean = np.nan
+                
+            if (not rlut_dict is None) & (model_name in rlut_dict):
+                rlut_i = rlut_dict[model_name]
+            else:
+                rlut_i = np.nan
+            
+            if (not rsut_dict is None) & (model_name in rsut_dict):
+                rsut_i = rsut_dict[model_name]
+            else:
+                rsut_i = np.nan
+                
 
         model_error_stats[model_name] = [model_i_std, model_i_corr, rmse_i, 
-                                         ampl_mean, phase_mean, ecs_i, tcr_i]
+                                         ampl_mean, phase_mean, ecs_i, tcr_i,
+                                         rlut_i, rsut_i]
 
     model_error_stats_df = pd.DataFrame(model_error_stats).T
     model_error_stats_df.columns = ['std', 'corr', 'rmse', 
-                                    'ampl_mean', 'phase_mean', 'ecs', 'tcr']
+                                    'ampl_mean', 'phase_mean', 'ecs', 'tcr',
+                                    'rlut', 'rsut']
     return model_error_stats_df
 
 
