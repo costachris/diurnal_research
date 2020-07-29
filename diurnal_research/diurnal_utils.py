@@ -78,8 +78,11 @@ def cos_fit_grid_average(field_array, hour_bins):
     
     out_shape = (field_array.shape[1], field_array.shape[2])
     amplitude_xy = np.zeros(out_shape)
-    frequency_xy = np.zeros(out_shape)
     phase_xy = np.zeros(out_shape)
+    
+    # cov matricies
+    amplitude_xy_cov = np.zeros(out_shape)
+    phase_xy_cov = np.zeros(out_shape)
     
     for lat_ii in tqdm(range(out_shape[0])):
         for lon_ii in range(out_shape[1]):
@@ -103,7 +106,7 @@ def cos_fit_grid_average(field_array, hour_bins):
                 params, params_covariance = optimize.curve_fit(cos_func, 
                                                                hour_bins, 
                                                                ts_loc_mean_sub_interp,
-                                                               bounds = (0,24),
+#                                                                bounds = (0,24),
                                                                p0=[ts_loc_mean_sub_interp.std(),
                                                                    hour_bins[np.nanargmax(ts_loc)]],
                                                                maxfev=10000)
@@ -111,9 +114,14 @@ def cos_fit_grid_average(field_array, hour_bins):
                 params = np.array([np.nan, np.nan, np.nan])
 
             amplitude_xy[lat_ii, lon_ii] = params[0]
-            phase_xy[lat_ii, lon_ii] = params[1]
+            # the %24 below acccounts for cases when phase is outside of [0, 24] hours
+            phase_xy[lat_ii, lon_ii] = params[1]%24 
+            
+            # cov measures
+            amplitude_xy_cov[lat_ii, lon_ii] = np.diag(params_covariance)[0]
+            phase_xy_cov[lat_ii, lon_ii] = np.diag(params_covariance)[1]
         
-    return(amplitude_xy, phase_xy)
+    return(amplitude_xy, phase_xy, amplitude_xy_cov, phase_xy_cov)
 
 
 
@@ -249,6 +257,8 @@ def diurnal_analysis(ds, field_id, grid_time_resolution_hours = 3, time_resoluti
     sigma_season = {}
     ampl_season = {}
     phase_season = {}
+    ampl_cov_season = {}
+    phase_cov_season = {}
     average_cycle_season = {}
 
     for season_i, season_ds in ds_seasons:
@@ -336,18 +346,21 @@ def diurnal_analysis(ds, field_id, grid_time_resolution_hours = 3, time_resoluti
         res = cos_fit_grid_average(hour_means, hour_bins)
         print('Finished Cos Fit')
         ampl_season[season_i], phase_season[season_i] = res[0], res[1]
+        ampl_cov_season[season_i], phase_cov_season[season_i] = res[2], res[3]
         
-        #TODO : Move this over! Should not do every iteration of the loop
-        # make results into dataarrays
-        out_ds = xr.Dataset()
-        out_ds['mu_season'] = make_da_from_dict(mu_season, ds)
-        out_ds['sigma_season'] = make_da_from_dict(sigma_season,ds)
-        out_ds['ampl_season'] = make_da_from_dict(ampl_season, ds)
-        out_ds['phase_season'] = make_da_from_dict(phase_season,ds)
-    
-        out_ds_means = xr.Dataset()
-        out_ds_means = make_da_from_dict_time(average_cycle_season, ds, grid_hour_bins)
-        out_ds_means = out_ds_means.to_dataset(name = field_id + '_mean')
+    #TODO : Move this over! Should not do every iteration of the loop
+    # make results into dataarrays
+    out_ds = xr.Dataset()
+    out_ds['mu_season'] = make_da_from_dict(mu_season, ds)
+    out_ds['sigma_season'] = make_da_from_dict(sigma_season,ds)
+    out_ds['ampl_season'] = make_da_from_dict(ampl_season, ds)
+    out_ds['phase_season'] = make_da_from_dict(phase_season,ds)
+    out_ds['ampl_cov_season'] = make_da_from_dict(ampl_cov_season, ds)
+    out_ds['phase_cov_season'] = make_da_from_dict(phase_cov_season,ds)
+
+    out_ds_means = xr.Dataset()
+    out_ds_means = make_da_from_dict_time(average_cycle_season, ds, grid_hour_bins)
+    out_ds_means = out_ds_means.to_dataset(name = field_id + '_mean')
        
 
     return (out_ds, out_ds_means)
