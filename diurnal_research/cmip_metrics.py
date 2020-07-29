@@ -1,8 +1,9 @@
 '''Externally computed metrics for CMIP models, by name (ie. ECS, TCS, error) 
 'Context for interpreting equilibrium climate sensitivity and transient climate response from the CMIP6 Earth system models' Science, 2020
 https://advances.sciencemag.org/content/6/26/eaba1981 '''
-
+import pandas as pd
 ###### CMIP6 metrics
+
 
 cmip6_ecs = {
  'ACCESS-CM2': 4.7,
@@ -122,3 +123,21 @@ cmip5_tcr = {
  'NorESM1-M': 1.4,
  'inmcm4': 1.3,
 }
+
+
+
+cmip6_ecs_df = pd.DataFrame.from_dict(cmip6_ecs, orient = 'index')
+cmip6_ecs_df.columns = ['ECS',]
+
+cmip6_tcr_df = pd.DataFrame.from_dict(cmip6_tcr, orient = 'index')
+cmip6_tcr_df.columns = ['TCR',]
+
+cmip6_sensitivities = pd.merge(cmip6_ecs_df, cmip6_tcr_df, how = 'outer', left_index = True, right_index = True)
+
+cmip5_ecs_df = pd.DataFrame.from_dict(cmip5_ecs, orient = 'index')
+cmip5_ecs_df.columns = ['ECS',]
+
+cmip5_tcr_df = pd.DataFrame.from_dict(cmip5_tcr, orient = 'index')
+cmip5_tcr_df.columns = ['TCR',]
+
+cmip5_sensitivities = pd.merge(cmip5_ecs_df, cmip5_tcr_df, how = 'outer', left_index = True, right_index = True)
