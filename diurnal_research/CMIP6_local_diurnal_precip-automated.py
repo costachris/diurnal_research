@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[22]:
 
 
 import os
@@ -24,8 +24,11 @@ from fetch_model_helper import *
 
 # # Notebook for exploring local CMIP6 data downloaded with `cmip6_downloader.py`
 
-# In[2]:
+# In[23]:
 
+
+out_folder_identifier = 'bin_pt2_hr' #label to append to output path
+skip_if_folder_exists =  True # used for processing models in parallel
 
 
 
@@ -40,7 +43,7 @@ end_date = '2006-01'
 #TODO overwrite_existing_files = False
 
 
-# In[22]:
+# In[24]:
 
 
 # get all available model names
@@ -50,58 +53,61 @@ unique_cmip6_models = get_unique_models(rel_cmip6_path)
 unique_cmip5_models = get_unique_models(rel_cmip5_path)
 
 
-# In[19]:
+# In[25]:
 
 
 # unique_cmip6_models
+unique_cmip6_models
 
 
-# In[8]:
+# In[26]:
 
 
-# cmip6_model_names = diurnal_config.cmip6_to_cmip5_map.keys()
-# cmip5_model_names = diurnal_config.cmip6_to_cmip5_map.values()
+
 
 if cmip_identifier == 'CMIP6':
-#     all_model_names = list(cmip6_model_names)
     all_model_names = unique_cmip6_models
-    cmip_rel_dir = '/export/data1/cchristo/CMIP6_precip/pr_3hr_historical/'
+    cmip_rel_dir = rel_cmip6_path
 
 elif cmip_identifier == 'CMIP5':
-#     all_model_names = list(cmip5_model_names)
     all_model_names = unique_cmip5_models
-    cmip_rel_dir = '/export/data1/cchristo/CMIP5_precip/pr_3hr_historical/'
+    cmip_rel_dir = rel_cmip5_path
     
 
 
-# In[20]:
+# In[30]:
 
 
 # get_path_to_desired_model_cmip6(cmip_rel_dir, 
 #                                   desired_model= 'CanESM5',
 #                                   desired_grid_types = ('gn', 'gr', 'gr1'))
+list(all_model_names)
 
 
-# In[4]:
+# In[13]:
 
 
 
 for model_name in list(all_model_names):
     print('Started... ', model_name)
-    save_figs_dir = '/home/cchristo/proj_tapio/diurnal_research/figs/diurnal_cycle_figs/' + cmip_identifier + '/' + model_name + '/'
-    save_output_dir = '/export/data1/cchristo/diurnal_analysis_results/' + cmip_identifier + '/'+ model_name + '/'
+
+    save_output_dir = '/export/data1/cchristo/diurnal_analysis_results/' +         cmip_identifier + '_'+ out_folder_identifier + '/' + model_name + '/'
     
     save_output_path = save_output_dir + start_date + '_' + end_date + '_precip.nc'
     save_output_path_means = save_output_dir + start_date + '_' + end_date + '_precip_diurnal_means.nc'
-     # make dirs if they don't already exist
-    if not os.path.exists(save_figs_dir):
-        os.makedirs(save_figs_dir)
+    
+    # skip folder if it's already been created (another script may be processing it)
+    skip_model_iteration = False
+    if skip_if_folder_exists & os.path.exists(save_output_dir):
+        skip_model_iteration = True
 
-    if not os.path.exists(save_output_dir):
-        os.makedirs(save_output_dir)
+    else:
+         # make dirs if they don't already exist
+        if not os.path.exists(save_output_dir):
+            os.makedirs(save_output_dir)
     
     # if files already exist, skip
-    if (not os.path.exists(save_output_path)) &         (not os.path.exists(save_output_path_means)):
+    if (not os.path.exists(save_output_path)) &         (not os.path.exists(save_output_path_means)) &         (not skip_model_iteration):
    
         try:
             #### Load data
@@ -127,8 +133,8 @@ for model_name in list(all_model_names):
             out_ds, out_ds_means = diurnal_analysis(ds_sub, 
                                                     field_id = 'pr', 
                                                     grid_time_resolution_hours = 3,
-                                                    time_resolution_hours = 1)
-            # add some metadata 
+                                                    time_resolution_hours = 0.2)
+#             # add some metadata 
             out_ds.attrs['input_dataset_paths'] = path_to_cmip_files
             out_ds_means.attrs['input_dataset_paths'] = path_to_cmip_files
             
@@ -144,15 +150,41 @@ for model_name in list(all_model_names):
 print('DONE!')
 
 
-# In[8]:
+# In[7]:
 
 
-# average_cycle_season['DJF'].shape
-# dd = xr.DataArray()
-# dd.to_dataset(name = 'pr_mean')
+ds.isel(time = 0)['time'].values.item()
 
 
-# In[29]:
+# In[12]:
+
+
+dt_i = datetime.strptime(str(ds.isel(time = 0)['time'].values.item()), '%Y-%m-%d %H:%M:%S')
+
+
+# In[13]:
+
+
+dt_i
+
+
+# In[ ]:
+
+
+
+
+
+# In[112]:
+
+
+# %run fetch_model_helper.py
+# path_to_cmip_files =  get_path_to_desired_model_cmip6(cmip_rel_dir, 
+#                                       desired_model= 'EC-Earth3-Veg-LR', #model_name,
+#                                       desired_ensemble_member = ('r1i1p1f1', 'r1i1p2f1','r1i1p1f2'),
+#                                       desired_grid_types = ('gn', 'gr', 'gr1', 'gr2'))
+
+
+# In[101]:
 
 
 # path_to_cmip_files
@@ -160,13 +192,7 @@ print('DONE!')
 # save_output_dir + start_date + '_' + end_date + '_precip.nc'
 
 
-# In[30]:
-
-
-# res = make_da_from_dict_time(average_cycle_season, ds, hour_bins)
-
-
-# In[31]:
+# In[102]:
 
 
 # print(stacked.shape)
@@ -189,7 +215,7 @@ print('DONE!')
 # In[35]:
 
 
-FLUX_TO_MM_HR = 60*60
+# FLUX_TO_MM_HR = 60*60
 
 
 # In[6]:

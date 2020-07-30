@@ -344,6 +344,8 @@ def diurnal_analysis(ds, field_id, grid_time_resolution_hours = 3, time_resoluti
         print('Performing Cos Fit')
 #         res = cos_fit_grid(field_season_array, lst_array, hour_means, hour_bins)
         res = cos_fit_grid_average(hour_means, hour_bins)
+        # TODO: Remove this print!
+        print('New!')
         print('Finished Cos Fit')
         ampl_season[season_i], phase_season[season_i] = res[0], res[1]
         ampl_cov_season[season_i], phase_cov_season[season_i] = res[2], res[3]
