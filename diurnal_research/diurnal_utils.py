@@ -66,14 +66,26 @@ def cos_fit_grid(field_array, lst_array, hour_means, hour_bins):
 
 
 def cos_fit_grid_average(field_array, hour_bins):
-    ''' Given ds, perform cos fit grid-by-grid and return array of fitted parameters.
+    ''' Given array of timeseries along time axis, perform cos fit 
+    grid-by-grid and return array of fitted phase and ampltiude. Returns
+    grid of fitted parameters and associated uncertainties.
+    
         Inputs: 
             field_array - [time, lat, lon]
-    
+                Array of values to perform cos fit for. 
+            hour_bins - [1xtime] array
+                
+                
         Returns: 
             amplitude_xy - [lat, lon]
-            frequency_xy - [lat, lon]
-            phase_xy - [lat, lon] 
+                Amplitude of fit. 
+                
+            phase_xy - [lat, lon]
+                Phase of fit.
+            amplitude_xy_cov - 
+                Covariance of amplitude fit
+            phase_xy-cov - 
+                Covariance of phase fit
             '''
     
     out_shape = (field_array.shape[1], field_array.shape[2])
@@ -114,8 +126,12 @@ def cos_fit_grid_average(field_array, hour_bins):
                 params = np.array([np.nan, np.nan, np.nan])
 
             amplitude_xy[lat_ii, lon_ii] = params[0]
+            
             # the %24 below acccounts for cases when phase is outside of [0, 24] hours
             phase_xy[lat_ii, lon_ii] = params[1]%24 
+            
+            # handle cases where amplitude is negative by making postive and
+            # shifting by pi. 
             
             # cov measures
             amplitude_xy_cov[lat_ii, lon_ii] = np.diag(params_covariance)[0]

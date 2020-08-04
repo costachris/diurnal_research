@@ -20,6 +20,7 @@ cmip6_ecs = {
  'EC-Earth3-Veg': 4.3,
 #  'EC-Earth3-Veg-LR': 4.3, # model not in paper
 #  'FGOALS-g3': 3.0,  # name doesn't quite match
+ 
  'GFDL-CM4': 3.9, 
  'GFDL-ESM4': 2.6, 
  'GISS-E2-1-G': 2.7, 

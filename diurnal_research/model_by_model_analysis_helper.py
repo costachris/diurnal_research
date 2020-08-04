@@ -10,6 +10,7 @@ from scipy.stats import circmean, circstd, mode
 
 from mpl_toolkits.basemap import Basemap
 import taylorDiagram
+from phaseDiagram import *
 
 import diurnal_config
 
@@ -76,14 +77,19 @@ def filter_by_lat(df, min_lat, max_lat, absolute_value = False):
         min_lat = 35 and max_lat = 60, find regions in both northern
         and southern hemisphere. (35 to 60 & -35 to -60). 
     '''
-    
-    df = df.reset_index(['lat','lon'])
+    if 'season' in df.index.names:
+        desired_index_names = ['season','lat','lon']
+        df = df.reset_index(desired_index_names)
+        
+    else:
+        desired_index_names = ['lat','lon']
+        df = df.reset_index(desired_index_names)
     
     if absolute_value:
-        return df[(abs(df['lat'])>= min_lat) & (abs(df['lat']) <= max_lat)].set_index(['lat','lon'])
+        return df[(abs(df['lat'])>= min_lat) & (abs(df['lat']) <= max_lat)].set_index(desired_index_names)
 
     else:
-        return df[(df['lat']>= min_lat) & (df['lat'] <= max_lat)].set_index(['lat','lon'])
+        return df[(df['lat']>= min_lat) & (df['lat'] <= max_lat)].set_index(desired_index_names)
 
 def filter_by_season(df, season):
     '''Filter df by season. '''
@@ -134,6 +140,37 @@ def _get_mean_field(data_dir,
     return rad_dict
 
     
+def _merge_models_into_df(model_names, input_data_dir,
+                          filename = '1985-01_2006-01_precip.nc',
+                          compute_year_mean_bool = False, 
+                          verbose = False):
+    '''Given list of model names and path to cmip files containing seasonal components, 
+    open and take yearly mean (ensuring a circular mean is used for phase).'''
+    objs = {}
+    df = pd.DataFrame()
+    for model_name_i in range(len(model_names)):  
+        try:
+            model_name = model_names[model_name_i]
+            path_to_file = input_data_dir + model_name + '/' + filename
+            ds_i = xr.open_dataset(path_to_file)
+            if compute_year_mean_bool:
+                ds_i_phase_year_mean = xr.apply_ufunc(phase_circmean, ds_i['phase_season'], 
+#                                    kwargs = {'low' : 0.0, 'high' : 24.0},
+                                   input_core_dims=[["season"]], 
+                                   vectorize = True,
+                                   dask = 'allowed')
+                ds_i = ds_i.mean(dim = 'season')
+                ds_i['phase_season'] = ds_i_phase_year_mean
+            objs[model_names[model_name_i]] = ds_i.to_dataframe()
+            objs[model_names[model_name_i]]['model_name'] = model_name
+        
+        except Exception as e:
+            if verbose:
+                print('Could not get ', model_name_i, ' : ', e)
+    df = pd.concat(list(objs.values()), axis = 0)
+    return df
+
+
 # def fetch_means_n_35:
     
     
@@ -288,35 +325,35 @@ def compute_stats(df_for_stats,
         
         
         
-            if (not ecs_dict is None) & (model_name in ecs_dict):
-                ecs_i = ecs_dict[model_name]
-            else:
-                ecs_i = np.nan
+#             if (not ecs_dict is None) & (model_name in ecs_dict):
+#                 ecs_i = ecs_dict[model_name]
+#             else:
+#                 ecs_i = np.nan
                 
-            if (not tcr_dict is None) & (model_name in tcr_dict):
-                tcr_i = tcr_dict[model_name]
-            else:
-                tcr_i = np.nan
+#             if (not tcr_dict is None) & (model_name in tcr_dict):
+#                 tcr_i = tcr_dict[model_name]
+#             else:
+#                 tcr_i = np.nan
                 
-            if (not rlut_dict is None) & (model_name in rlut_dict):
-                rlut_i = rlut_dict[model_name]
-            else:
-                rlut_i = np.nan
+#             if (not rlut_dict is None) & (model_name in rlut_dict):
+#                 rlut_i = rlut_dict[model_name]
+#             else:
+#                 rlut_i = np.nan
             
-            if (not rsut_dict is None) & (model_name in rsut_dict):
-                rsut_i = rsut_dict[model_name]
-            else:
-                rsut_i = np.nan
+#             if (not rsut_dict is None) & (model_name in rsut_dict):
+#                 rsut_i = rsut_dict[model_name]
+#             else:
+#                 rsut_i = np.nan
                 
-            if (not pr_dict is None) & (model_name in pr_dict):
-                pr_i = pr_dict[model_name]
-            else:
-                pr_i = np.nan
+#             if (not pr_dict is None) & (model_name in pr_dict):
+#                 pr_i = pr_dict[model_name]
+#             else:
+#                 pr_i = np.nan
             
-            if (not clt_dict is None) & (model_name in clt_dict):
-                clt_i = clt_dict[model_name]
-            else:
-                clt_i = np.nan
+#             if (not clt_dict is None) & (model_name in clt_dict):
+#                 clt_i = clt_dict[model_name]
+#             else:
+#                 clt_i = np.nan
 
         model_error_stats[indexers] = [model_i_std, model_i_corr, rmse_i, 
                                          ampl_mean, phase_mean, ecs_i, tcr_i,
@@ -354,6 +391,17 @@ def land_sea_histogram(df,
     return plt.gca()
 
 
+
+def plot_corr_matrix(corr_mat_ds):
+    plt.figure(figsize = (12,10))
+    plt.title('Correlation Matrix for All Latitudes [Method: mode]')
+    upper_tr_mask = np.triu(corr_mat_ds.corr())
+    sns.heatmap(corr_mat_ds.corr(), annot = True, 
+                vmin = -1, vmax = 1, center = 0, fmt='.2g',
+                mask = upper_tr_mask)
+    plt.tight_layout()
+    
+    
 
 ##### More plotting 
 

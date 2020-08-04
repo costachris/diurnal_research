@@ -28,17 +28,17 @@ from fetch_model_helper import *
 
 
 out_folder_identifier = 'bin_pt2_hr' #label to append to output path
-skip_if_folder_exists =  True # used for processing models in parallel
+skip_if_folder_exists =  False # used for processing models in parallel
 
 
 
-# cmip_identifier = 'CMIP6'
-# start_date = '1985-01'
-# end_date = '2006-01'
-
-cmip_identifier = 'CMIP5'
+cmip_identifier = 'CMIP6'
 start_date = '1985-01'
 end_date = '2006-01'
+
+# cmip_identifier = 'CMIP5'
+# start_date = '1985-01'
+# end_date = '2006-01'
 
 #TODO overwrite_existing_files = False
 
@@ -53,11 +53,12 @@ unique_cmip6_models = get_unique_models(rel_cmip6_path)
 unique_cmip5_models = get_unique_models(rel_cmip5_path)
 
 
-# In[25]:
+# In[33]:
 
 
 # unique_cmip6_models
 unique_cmip6_models
+# len(unique_cmip6_models)
 
 
 # In[26]:
