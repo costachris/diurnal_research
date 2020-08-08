@@ -102,42 +102,98 @@ def _get_mean_field(data_dir,
                     field_name = 'rlut',
                     file_name = '1985-01_2006-01_mean.nc',
                     filter_lat = False,
+                    landsea_mask_df = None,
+                    landsea_bool = None,
                     **kwargs):
     '''Given path to cmip files (with subdirs for each model),
-    take mean of each model and return dict.
+    take mean of each model and return dataframe.
     Args
     -----
     data_dir - str
         dir containing cmip models in folders
         
-        filter_lat - bool
-            whether or not to filter by lat. 
+    filter_lat - bool
+        whether or not to filter by lat. 
+    landsea_mask_df - pd.DataFrame
+        Pandas dataframe containing lat/lon as multiindex keys and 
+        mask as column (0 for water, 1 for land). df should only
+        contain one column. ``
+    landsea_bool - bool 
+        If 1 return land only, if 0 return sea only. 
             
-        **kwargs
-            keyword arguments to be past to lat filtering function
-            (filter_by_lat)
+    **kwargs
+        keyword arguments to be past to lat filtering function
+        (filter_by_lat)
     
     '''
-    rad_dict = {}
+    var_dict = {}
 
     model_names = os.listdir(data_dir)
+#     print(model_names)
     for model_name in model_names:
         try:
             ds_field = xr.open_dataset(data_dir + model_name + '/' + file_name)
+            df_field = ds_field.to_dataframe()
             
-            if filter_lat:
-                df_field = ds_field.to_dataframe()
-                df_field_filtered = filter_by_lat(df_field, **kwargs)
-                rad_dict[model_name] = df_field_filtered[field_name].mean()
+            ## if landsea mask filter
+            if (not (landsea_mask_df is None)) & \
+               (not (landsea_bool is None)): 
                 
+                df_field_mask = pd.merge(df_field, landsea_mask_df,
+                                         how = 'left',
+                                         left_index = True, 
+                                         right_index = True)
+                landsea_mask_id = landsea_mask_df.columns[0]
+                # select land
+                if landsea_bool == 1:
+                    df_field_mask = \
+                        df_field_mask[df_field_mask[landsea_mask_id] == 1]
+                
+                # select water
+                if landsea_bool == 0:
+                    df_field_mask = \
+                        df_field_mask[df_field_mask[landsea_mask_id] == 0]
+                
+                df_field = df_field_mask.loc[:,field_name]
+                
+            if filter_lat:
+                df_field_filtered = filter_by_lat(df_field, **kwargs)
+                var_dict[model_name] = df_field_filtered[field_name].mean()
+#                 return df_field_filtered
             else:
-                rad_dict[model_name] = ds_field[field_name].mean().item()
+                var_dict[model_name] = ds_field[field_name].mean().item()
             
 
         except Exception as e: 
             print('Could not process ', model_name, ' ', str(e))
+    out_df = pd.DataFrame.from_dict(var_dict, orient = 'index')
+    out_df.columns = [field_name,] 
+    return out_df
+
+def _get_mean_fields(
+    field_names,
+    mean_fields_to_rel_path_map,
+    filter_by_lat = False,
+    **kwargs):
+    '''Apply _get_mean_field over a sequence of variables
+    and return a single DataFrame.
     
-    return rad_dict
+    Args
+    -------
+    rel_dir - str
+        Relative directory to files containing mean fiels 
+    '''
+    out_df = pd.DataFrame()
+    dfs_to_concat = []
+    for field_name in field_names: 
+        data_dir = mean_fields_to_rel_path_map[field_name]
+        # open dataset with fields to 
+        dfs_to_concat.append(_get_mean_field(
+                            data_dir = data_dir, 
+                            field_name = field_name, 
+                            **kwargs))
+    return pd.concat(dfs_to_concat, axis = 1)
+
 
     
 def _merge_models_into_df(model_names, input_data_dir,
@@ -356,13 +412,15 @@ def compute_stats(df_for_stats,
 #                 clt_i = np.nan
 
         model_error_stats[indexers] = [model_i_std, model_i_corr, rmse_i, 
-                                         ampl_mean, phase_mean, ecs_i, tcr_i,
-                                         rlut_i, rsut_i, pr_i, clt_i]
+                                         ampl_mean, phase_mean,] 
+#     ecs_i, tcr_i,
+#                                          rlut_i, rsut_i, pr_i, clt_i]
 
     model_error_stats_df = pd.DataFrame(model_error_stats).T
     model_error_stats_df.columns = ['std', 'corr', 'rmse', 
-                                    'ampl_mean', 'phase_mean', 'ecs', 'tcr',
-                                    'rlut', 'rsut', 'pr', 'clt']
+                                    'ampl_mean', 'phase_mean',] # 'ecs', 'tcr',
+#                                     'rlut', 'rsut', 'pr', 'clt']
+    
     if len(groupby_vars) == 2: 
         model_error_stats_df.index.names = ['season', 'model_name']
     return model_error_stats_df
@@ -375,10 +433,11 @@ def land_sea_histogram(df,
     
     field_id_to_xlabel = {'phase_season': 'Phase [hours]',
                           'ampl_season': 'Amplitude'}
-    
-    sns.distplot(df[(df['land_sea_mask'] == 0) & (df['cmip_indentifier'] == cmip_identifier)][field_id].values, label = 'Water', bins = nbins)
-    sns.distplot(df[(df['land_sea_mask'] == 1) & (df['cmip_indentifier'] == cmip_identifier)][field_id].values, label = 'Land', bins = nbins)
-
+    if 'cmip_identifer' in df.columns:
+        sns.distplot(df[(df['land_sea_mask'] == 0) & (df['cmip_indentifier'] == cmip_identifier)][field_id].values, label = 'Water', bins = nbins)
+        sns.distplot(df[(df['land_sea_mask'] == 1) & (df['cmip_indentifier'] == cmip_identifier)][field_id].values, label = 'Land', bins = nbins)
+#     else: 
+#         sns.distplot(df[df])
     if field_id == 'phase_season':
         plt.xlim([0, 24])
         plt.ylim([0, 0.25])

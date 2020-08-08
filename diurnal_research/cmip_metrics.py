@@ -128,17 +128,17 @@ cmip5_tcr = {
 
 
 cmip6_ecs_df = pd.DataFrame.from_dict(cmip6_ecs, orient = 'index')
-cmip6_ecs_df.columns = ['ECS',]
+cmip6_ecs_df.columns = ['ecs',]
 
 cmip6_tcr_df = pd.DataFrame.from_dict(cmip6_tcr, orient = 'index')
-cmip6_tcr_df.columns = ['TCR',]
+cmip6_tcr_df.columns = ['tcr',]
 
 cmip6_sensitivities = pd.merge(cmip6_ecs_df, cmip6_tcr_df, how = 'outer', left_index = True, right_index = True)
 
 cmip5_ecs_df = pd.DataFrame.from_dict(cmip5_ecs, orient = 'index')
-cmip5_ecs_df.columns = ['ECS',]
+cmip5_ecs_df.columns = ['ecs',]
 
 cmip5_tcr_df = pd.DataFrame.from_dict(cmip5_tcr, orient = 'index')
-cmip5_tcr_df.columns = ['TCR',]
+cmip5_tcr_df.columns = ['tcr',]
 
 cmip5_sensitivities = pd.merge(cmip5_ecs_df, cmip5_tcr_df, how = 'outer', left_index = True, right_index = True)
