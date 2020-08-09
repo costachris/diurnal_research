@@ -15,6 +15,8 @@ from scipy import interpolate
 import numba
 from joblib import Parallel, delayed
 
+
+HOURS_TO_RADIANS = 2*np.pi/24
 ### Utility functions for finding amp, phase of diurnal cycle
 
 def cos_func(x, a, phi):
@@ -123,16 +125,20 @@ def cos_fit_grid_average(field_array, hour_bins):
                                                                    hour_bins[np.nanargmax(ts_loc)]],
                                                                maxfev=10000)
             except: 
-                params = np.array([np.nan, np.nan, np.nan])
+                params = np.array([np.nan, np.nan])
 
             amplitude_xy[lat_ii, lon_ii] = params[0]
             
             # the %24 below acccounts for cases when phase is outside of [0, 24] hours
-            phase_xy[lat_ii, lon_ii] = params[1]%24 
+            phase_xy[lat_ii, lon_ii] = params[1]
             
             # handle cases where amplitude is negative by making postive and
-            # shifting by pi. 
+            # shifting phase by pi. 
+            if amplitude_xy[lat_ii, lon_ii] < 0:
+                amplitude_xy[lat_ii, lon_ii] = -1*amplitude_xy[lat_ii, lon_ii]
+                phase_xy[lat_ii, lon_ii] += HOURS_TO_RADIANS*12
             
+            phase_xy[lat_ii, lon_ii] = phase_xy[lat_ii, lon_ii]%24
             # cov measures
             amplitude_xy_cov[lat_ii, lon_ii] = np.diag(params_covariance)[0]
             phase_xy_cov[lat_ii, lon_ii] = np.diag(params_covariance)[1]
