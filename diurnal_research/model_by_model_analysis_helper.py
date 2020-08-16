@@ -427,27 +427,56 @@ def compute_stats(df_for_stats,
 
 ################ Plotting #############################
 def land_sea_histogram(df, 
-                       nbins = 20,
+                       nbins = 100,
+                       title = None,
+                       ylabel = 'Probability Density',
+                       xlabel = None,
                        cmip_identifier = 'CMIP6', 
+                       new_fig = True, 
+                       ax = None,
                        field_id = 'phase_season'):
+    '''Given a dataframe, plot histogram and corresponding pdf with land/ocean breakdown'''
+    if new_fig & (not ax is None):
+        plt.figure()
     
     field_id_to_xlabel = {'phase_season': 'Phase [hours]',
                           'ampl_season': 'Amplitude'}
-    if 'cmip_identifer' in df.columns:
-        sns.distplot(df[(df['land_sea_mask'] == 0) & (df['cmip_indentifier'] == cmip_identifier)][field_id].values, label = 'Water', bins = nbins)
-        sns.distplot(df[(df['land_sea_mask'] == 1) & (df['cmip_indentifier'] == cmip_identifier)][field_id].values, label = 'Land', bins = nbins)
-#     else: 
-#         sns.distplot(df[df])
-    if field_id == 'phase_season':
-        plt.xlim([0, 24])
-        plt.ylim([0, 0.25])
-    plt.xlabel(field_id_to_xlabel[field_id])
-    plt.ylabel('Probability Density')
-    plt.title('PDF of CMIP6 Diurnal Precipitation Phase [hours]')
-    plt.grid()
-    plt.legend()
+    if 'cmip_identifier' in df.columns:
+        sns.distplot(df[(df['land_sea_mask'] == 0) & (df['cmip_identifier'] == cmip_identifier)][field_id].values, label = cmip_identifier + ' ' + 'Water', bins = nbins, ax = ax)
+        sns.distplot(df[(df['land_sea_mask'] == 1) & (df['cmip_identifier'] == cmip_identifier)][field_id].values, label = cmip_identifier + ' ' + 'Land', bins = nbins, ax = ax)
+    else: 
+        sns.distplot(df[(df['land_sea_mask'] == 0)][field_id].values, 
+                     label = 'Water', 
+                     bins = nbins, 
+                     ax = ax)
+        sns.distplot(df[(df['land_sea_mask'] == 1)][field_id].values, 
+                     label = 'Land', 
+                     bins = nbins, 
+                     ax = ax)
+    if not (ax is None):
+        if field_id == 'phase_season':
+            ax.set_xlim([0, 24])
+            ax.set_ylim([0, 0.22])
+        if xlabel:
+            ax.set_xlabel(field_id_to_xlabel[field_id], fontweight = 'bold')
+            
+        ax.set_ylabel(ylabel, fontweight = 'bold')
+        if title:
+            ax.set_title(title, fontweight = 'bold')
+        ax.grid()
+        ax.legend()
+        
+    else: 
+        if field_id == 'phase_season':
+            plt.xlim([0, 24])
+            plt.ylim([0, 0.25])
+        plt.xlabel(field_id_to_xlabel[field_id], fontweight = 'bold')
+        plt.ylabel(ylabel, fontweight = 'bold')
+        plt.title(title, fontweight = 'bold')
+        plt.grid()
+        plt.legend()
     
-    return plt.gca()
+#     return plt.gca()
 
 
 

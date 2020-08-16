@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[17]:
+# In[16]:
 
 
 import os
@@ -25,22 +25,24 @@ from diurnal_utils import *
 # %run diurnal_utils.py
 
 
-# In[18]:
+# In[13]:
 
+
+out_folder_identifier = 'bin_pt2_hr_15_yr' #label to append to output path
 
 start_date = '2000-06'
-end_date =  '2010-06'
-# end_date =  '2001-06'
+# end_date = '2000-07'
+end_date =  '2016-06'
 
 
-# In[19]:
+# In[14]:
 
 
-save_output_dir = '/export/data1/cchristo/diurnal_analysis_results/GPM/'
+save_output_dir = '/export/data1/cchristo/diurnal_analysis_results/GPM_' + out_folder_identifier + '/'
 save_figs_dir = '/home/cchristo/proj_tapio/figs/diurnal_cycle_figs/gpm_2000_2010_precip/'
 
 
-# In[57]:
+# In[17]:
 
 
 # model_dir = '/export/data1/cchristo/gpm_data/gpmdata/'
@@ -63,13 +65,13 @@ for path_i in result:
 result = sorted(result_filt)
 
 
-# In[ ]:
+# In[19]:
 
 
+# result
 
 
-
-# In[5]:
+# In[20]:
 
 
 # %%time
@@ -89,7 +91,7 @@ ds = xr.open_mfdataset(result, combine='nested', concat_dim = 'time')
 
 
 
-# In[6]:
+# In[21]:
 
 
 ds = ds.sel(time = slice(start_date, end_date))
@@ -139,18 +141,21 @@ ds = ds.sel(lat= slice(-60, 60))
 # ds['precipitationCal']
 
 
-# In[8]:
+# In[22]:
 
 
 
 out_ds, out_ds_means = diurnal_analysis(ds, 
                                         field_id = 'precipitationCal', 
                                         grid_time_resolution_hours = 0.5,
-                                        time_resolution_hours = 0.5)
+                                        time_resolution_hours = 0.2) #0.5)
 
 
-# In[9]:
+# In[24]:
 
+
+if not os.path.exists(save_output_dir):
+    os.makedirs(save_output_dir)
 
 out_ds.to_netcdf(save_output_dir + start_date + '_' + end_date + '_precip.nc')
 out_ds_means.to_netcdf(save_output_dir + start_date + '_' + end_date + '_precip_diurnal_means.nc')

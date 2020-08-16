@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[22]:
+# In[34]:
 
 
 import os
@@ -32,13 +32,13 @@ skip_if_folder_exists =  False # used for processing models in parallel
 
 
 
-cmip_identifier = 'CMIP6'
-start_date = '1985-01'
-end_date = '2006-01'
-
-# cmip_identifier = 'CMIP5'
+# cmip_identifier = 'CMIP6'
 # start_date = '1985-01'
 # end_date = '2006-01'
+
+cmip_identifier = 'CMIP5'
+start_date = '1985-01'
+end_date = '2006-01'
 
 #TODO overwrite_existing_files = False
 
@@ -53,11 +53,11 @@ unique_cmip6_models = get_unique_models(rel_cmip6_path)
 unique_cmip5_models = get_unique_models(rel_cmip5_path)
 
 
-# In[33]:
+# In[35]:
 
 
 # unique_cmip6_models
-unique_cmip6_models
+# unique_cmip6_models
 # len(unique_cmip6_models)
 
 
