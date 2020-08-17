@@ -138,7 +138,6 @@ def _get_mean_field(data_dir,
             ## if landsea mask filter
             if (not (landsea_mask_df is None)) & \
                (not (landsea_bool is None)): 
-                
                 df_field_mask = pd.merge(df_field, landsea_mask_df,
                                          how = 'left',
                                          left_index = True, 
@@ -173,7 +172,6 @@ def _get_mean_field(data_dir,
 def _get_mean_fields(
     field_names,
     mean_fields_to_rel_path_map,
-    filter_by_lat = False,
     **kwargs):
     '''Apply _get_mean_field over a sequence of variables
     and return a single DataFrame.
@@ -427,7 +425,7 @@ def compute_stats(df_for_stats,
 
 ################ Plotting #############################
 def land_sea_histogram(df, 
-                       nbins = 100,
+                       nbins = 120,
                        title = None,
                        ylabel = 'Probability Density',
                        xlabel = None,

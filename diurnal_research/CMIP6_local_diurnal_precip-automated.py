@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[34]:
+# In[1]:
 
 
 import os
@@ -24,10 +24,10 @@ from fetch_model_helper import *
 
 # # Notebook for exploring local CMIP6 data downloaded with `cmip6_downloader.py`
 
-# In[23]:
+# In[2]:
 
 
-out_folder_identifier = 'bin_pt2_hr' #label to append to output path
+out_folder_identifier = 'bin_pt2_hr_round' #label to append to output path
 skip_if_folder_exists =  False # used for processing models in parallel
 
 
@@ -43,7 +43,7 @@ end_date = '2006-01'
 #TODO overwrite_existing_files = False
 
 
-# In[24]:
+# In[3]:
 
 
 # get all available model names
@@ -61,7 +61,7 @@ unique_cmip5_models = get_unique_models(rel_cmip5_path)
 # len(unique_cmip6_models)
 
 
-# In[26]:
+# In[4]:
 
 
 
@@ -76,16 +76,18 @@ elif cmip_identifier == 'CMIP5':
     
 
 
-# In[30]:
+# In[5]:
 
 
 # get_path_to_desired_model_cmip6(cmip_rel_dir, 
 #                                   desired_model= 'CanESM5',
 #                                   desired_grid_types = ('gn', 'gr', 'gr1'))
-list(all_model_names)
+# list(all_model_names)
+# all_model_names = ['IPSL-CM6A-LR',]
+# all_model_names
 
 
-# In[13]:
+# In[7]:
 
 
 
@@ -151,28 +153,10 @@ for model_name in list(all_model_names):
 print('DONE!')
 
 
-# In[7]:
-
-
-ds.isel(time = 0)['time'].values.item()
-
-
 # In[12]:
 
 
-dt_i = datetime.strptime(str(ds.isel(time = 0)['time'].values.item()), '%Y-%m-%d %H:%M:%S')
-
-
-# In[13]:
-
-
-dt_i
-
-
-# In[ ]:
-
-
-
+# ds.isel(time = 0)['time'].values.item()
 
 
 # In[112]:

@@ -151,6 +151,7 @@ def cos_fit_grid_average(field_array, hour_bins):
 def calc_solar_time(utc_time, 
                     longitude, 
                     bin_interval = 3, 
+                    round_precision = 2, 
                     bin_bool = True):
     ''' Compute local solartime give longitude and time array-like objects.
     Args - 
@@ -162,7 +163,8 @@ def calc_solar_time(utc_time,
     lst_approx = ((utc_time.hour + utc_time.minute/60.0) + (longitude_radians / np.pi * 12))#%24
     if bin_bool:
 #         return (lst_approx - (lst_approx%3))
-        return ((lst_approx + (bin_interval/2)) - ((lst_approx+(bin_interval/2))%bin_interval))%24
+        binned_lst = ((lst_approx + (bin_interval/2)) - ((lst_approx+(bin_interval/2))%bin_interval))%24
+        return np.round(binned_lst, round_precision)
     else:
         return lst_approx%24
 
@@ -228,6 +230,7 @@ def compute_lst_array(ds,
                       lon_id = 'lon', 
                       lat_id = 'lat', 
                       time_id = 'time', 
+                      round_precision = 2, 
                       lon_mesh = None, 
                       lat_mesh = None):
     '''Given xr.dataset with longitude and UTC time field, compute lst array (time, lat, lon).
@@ -251,6 +254,7 @@ def compute_lst_array(ds,
             lst_times[time_ind,:,:] = calc_solar_time(dt_i, 
                                                       lon_mesh,
                                                       bin_interval = bin_interval,
+                                                      round_precision = 2, 
                                                       bin_bool = bin_bool)
         if method == 'ephem': 
 #             print('Using ephem method to calculate LST.')
@@ -267,10 +271,17 @@ def compute_lst_array(ds,
     
 ##### Do full analysis 
 
-def diurnal_analysis(ds, field_id, grid_time_resolution_hours = 3, time_resolution_hours = 1):
-    ''' Assumes ordering (time, lat, lon), with those field/coordinate names. '''
+def diurnal_analysis(ds, 
+                     field_id, 
+                     grid_time_resolution_hours = 3, 
+                     time_resolution_hours = 1,
+                     round_precision = 2):
+    ''' Assumes ordering (time, lat, lon), with those field/coordinate names.
+    Given dataset compute mean, standard deviation, amplitude, and phase. '''
     hour_bins = np.arange(time_resolution_hours, 24 + time_resolution_hours, time_resolution_hours)
+    hour_bins = np.round(hour_bins, round_precision)
     grid_hour_bins = np.arange(grid_time_resolution_hours, 24 + grid_time_resolution_hours, grid_time_resolution_hours)
+    grid_hour_bins = np.round(grid_hour_bins, round_precision)
     
     lon_mesh, lat_mesh = np.meshgrid(ds['lon'].values, ds['lat'].values)
     ds_seasons = ds.groupby('time.season')
@@ -290,6 +301,7 @@ def diurnal_analysis(ds, field_id, grid_time_resolution_hours = 3, time_resoluti
         lst_da = compute_lst_array(season_ds, 
                                    bin_interval = grid_time_resolution_hours, # time_resolution_hours,
                                    bin_bool = True, 
+                                   round_precision = round_precision,
                                    lon_mesh = lon_mesh, 
                                    lat_mesh = lat_mesh,
                                    field_id = field_id)
@@ -341,6 +353,7 @@ def diurnal_analysis(ds, field_id, grid_time_resolution_hours = 3, time_resoluti
         lst_da = compute_lst_array(season_ds, 
                                    bin_interval = time_resolution_hours,
                                    bin_bool = True, 
+                                   round_precision = round_precision,
                                    lon_mesh = lon_mesh, 
                                    lat_mesh = lat_mesh,
                                    field_id = field_id)
@@ -366,14 +379,10 @@ def diurnal_analysis(ds, field_id, grid_time_resolution_hours = 3, time_resoluti
         print('Performing Cos Fit')
 #         res = cos_fit_grid(field_season_array, lst_array, hour_means, hour_bins)
         res = cos_fit_grid_average(hour_means, hour_bins)
-        # TODO: Remove this print!
-        print('New!')
         print('Finished Cos Fit')
         ampl_season[season_i], phase_season[season_i] = res[0], res[1]
         ampl_cov_season[season_i], phase_cov_season[season_i] = res[2], res[3]
         
-    #TODO : Move this over! Should not do every iteration of the loop
-    # make results into dataarrays
     out_ds = xr.Dataset()
     out_ds['mu_season'] = make_da_from_dict(mu_season, ds)
     out_ds['sigma_season'] = make_da_from_dict(sigma_season,ds)
