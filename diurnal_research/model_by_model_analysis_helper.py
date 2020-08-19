@@ -16,6 +16,7 @@ import diurnal_config
 
 from diurnal_utils import *
 from fetch_model_helper import *
+from phaseDiagram import *
 
 # %run cmip_metrics.py
 
@@ -229,9 +230,85 @@ def _merge_models_into_df(model_names, input_data_dir,
     
     
     
+def full_analysis(df_for_stats,
+                  df_for_stats_true,
+                  cmip_sensitivities,
+                  field_means_df = None,
+                  field = 'phase_season',
+                  agg_method = 'mode',
+                  min_lat = None, 
+                  max_lat = None, 
+                  absolute_value = False,
+                  )
+    # split obs into land/sea 
+    df_for_stats_true_land = df_for_stats_true[df_for_stats_true['land_sea_mask'] == 1]
+    df_for_stats_true_water = df_for_stats_true[df_for_stats_true['land_sea_mask'] == 0]
+
+    # split model into land/sea
+    df_for_stats_land = df_for_stats[df_for_stats['land_sea_mask'] == 1]
+    df_for_stats_water = df_for_stats[df_for_stats['land_sea_mask'] == 0]
+    
+    
+    if (not min_lat is None) & (not max_lat is None):
+        df_for_stats_land = filter_by_lat(df_for_stats_land, 
+                                          min_lat, 
+                                          max_lat, 
+                                          absolute_value=absolute_values)
+        
+        df_for_stats_true_land = filter_by_lat(df_for_stats_true_land, 
+                                               min_lat, 
+                                               max_lat, 
+                                               absolute_value=absolute_values)
 
 
-# def fetch_means_s_35:
+        df_for_stats_water = filter_by_lat(df_for_stats_water, 
+                                           min_lat, 
+                                           max_lat, 
+                                           absolute_value=absolute_values)
+        
+        df_for_stats_true_water = filter_by_lat(df_for_stats_true_water, 
+                                                min_lat, 
+                                                max_lat, 
+                                                absolute_value=absolute_values)
+
+
+    
+
+    model_error_stats_df_land = compute_stats(df_for_stats_land,
+                 df_for_stats_true_land,
+                 field = field,
+                 agg_method = agg_method,
+                 additional_stats = True,)
+
+
+    ### compute stats for land/water
+    model_error_stats_df_water = compute_stats(df_for_stats_water,
+                     df_for_stats_true_water,
+                     agg_method = agg_method,
+                     field = field,
+                     additional_stats = True,)
+
+    all_stats_df_water = pd.merge(model_error_stats_df_water, cmip_sensitivities, 
+                             how = 'left',
+                             left_index = True, 
+                             right_index = True)
+    all_stats_df_land = pd.merge(all_stats_df_land, cmip_sensitivities, 
+                         how = 'left',
+                         left_index = True, 
+                         right_index = True)
+
+    if not field_means_df is None:
+        all_stats_df_water = pd.merge(all_stats_df_water, field_means_df,
+             how = 'left',
+             left_index = True, 
+             right_index = True)
+          all_stats_df_land = pd.merge(all_stats_df_land, field_means_df,
+             how = 'left',
+             left_index = True, 
+             right_index = True)
+            
+    return (all_stats_df_water, all_stats_df_land)
+
     
 # compute stats on df containing indicies 
 
@@ -478,9 +555,11 @@ def land_sea_histogram(df,
 
 
 
-def plot_corr_matrix(corr_mat_ds):
+def plot_corr_matrix(corr_mat_ds,
+                    title = 'Correlation Matrix'):
     plt.figure(figsize = (12,10))
-    plt.title('Correlation Matrix for All Latitudes [Method: mode]')
+    if title:
+        plt.title(title)
     upper_tr_mask = np.triu(corr_mat_ds.corr())
     sns.heatmap(corr_mat_ds.corr(), annot = True, 
                 vmin = -1, vmax = 1, center = 0, fmt='.2g',
@@ -489,7 +568,108 @@ def plot_corr_matrix(corr_mat_ds):
     
     
 
-##### More plotting 
+def make_phase_plot(water_df,
+                    land_df,
+                    obs_water_df,
+                    obs_land_df, 
+                    figsize = (13,8),
+                    markersize = 2,
+                    textsize = 8,
+                    normalize_ampl = True,
+                    ampl_unit_conversion_factor = 1.0):
+    
+    fig = plt.figure(figsize = figsize)
+
+    
+    taylor_diag = PhaseDiagram(fig = fig, 
+                              label = 'IMERG', 
+                              y_lim=(0, 4),
+                              radial_label_pos = 0
+                              )
+    taylor_diag.add_grid()
+    
+    # calculate obs phase mode
+    ampl_observed_water = mode_apply(obs_water_df['ampl_season'].round(4)* ampl_unit_conversion_factor)
+    ampl_observed_land = mode_apply(obs_land_df['ampl_season'].round(4)* ampl_unit_conversion_factor)
+    
+
+    if normalize_ampl:
+        ampl_to_plot_water = 1.0
+        ampl_to_plot_land = 1.0
+    else:
+        ampl_to_plot_water = ampl_observed_water
+        ampl_to_plot_land = ampl_observed_land
+
+    taylor_diag.add_sample(phase = mode_apply(obs_water_df['phase_season'].round(1)), 
+                               ampl = ampl_to_plot_water, 
+                               marker = '*', 
+                               c = 'b',
+                               label = 'IMERG-Water', 
+                               markersize = 13)
+
+    taylor_diag.add_sample(phase = mode_apply(obs_water_df['phase_season'].round(1)), 
+                               ampl = ampl_to_plot_land, 
+                               marker = '*', 
+                               c = 'g',
+                               label = 'IMERG-Land', 
+                               markersize = 13)
+
+
+    ## Plot model phase/ampl over water
+    model_list = list(water_df.index)
+    for model_name_i in range(len(model_list)):
+
+        phase_i = water_df.loc[model_list[model_name_i],:]['phase_mean']
+        ampl_i = water_df.loc[model_list[model_name_i],:]['ampl_mean'] * ampl_unit_conversion_factor
+
+        if normalize_ampl:
+            ampl_i = ampl_i/ampl_observed_water
+        taylor_diag.add_sample(phase = phase_i, 
+                               ampl = ampl_i, 
+                               marker = None,
+                               linestyle = None,
+                               c = 'b',
+                               label = str(model_name_i) + ': ' + model_list[model_name_i], 
+                               markersize = markersize)
+        taylor_diag.add_text(phase = phase_i, 
+                             ampl = ampl_i,
+                             text = model_name_i,
+                             label = str(model_name_i) + ': ' + model_list[model_name_i], 
+                             c = 'b',
+                             size = textsize,
+                             weight = 'bold')
+
+    ## Plot model phase/ampl over land
+    for model_name_i in range(len(model_list)):
+        phase_i = land_df.loc[model_list[model_name_i],:]['phase_mean']
+        ampl_i = land_df.loc[model_list[model_name_i],:]['ampl_mean'] * ampl_unit_conversion_factor
+
+        if normalize_ampl:
+            ampl_i = ampl_i/ampl_observed_land
+
+        taylor_diag.add_sample(phase = phase_i, 
+                               ampl = ampl_i, 
+                               marker = None, 
+                               c = 'g',
+                               linestyle = None,
+    #                            label = str(model_name_i) + ': ' + model_list[model_name_i], 
+                               label = None,
+                               markersize = markersize)
+        taylor_diag.add_text(phase = phase_i, 
+                             ampl = ampl_i,
+                             text = model_name_i,
+                             c = 'g',
+                             size = textsize,
+                             weight = 'bold')
+
+
+
+    leg = plt.legend(loc = 'center left', bbox_to_anchor=(1.1,0.5), prop={'size': 11}, handlelength = 0, markerscale = 0.8)
+
+
+    plt.title(r'Diurnal Phase [hr] & Amplitude [$\frac{mm}{yr}$] for CMIP5 and IMERG', weight = 'bold')
+    
+
 
 
 #### Old code 

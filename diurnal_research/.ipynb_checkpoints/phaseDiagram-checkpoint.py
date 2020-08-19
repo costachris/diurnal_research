@@ -12,7 +12,7 @@ class PhaseDiagram(object):
     Make phase plot. 
     """
 
-    def __init__(self, refstd,
+    def __init__(self,
                  fig=None, rect=111, label='_', y_lim=(0, 1.5), radial_label_pos = 0):
         """
         Set up Taylor diagram axes, i.e. single quadrant polar
@@ -20,7 +20,6 @@ class PhaseDiagram(object):
 
         Parameters:
 
-        * refstd: reference standard deviation to be compared to
         * fig: input Figure or None
         * rect: subplot definition
         * label: reference label

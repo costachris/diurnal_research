@@ -379,8 +379,6 @@ def diurnal_analysis(ds,
         print('Performing Cos Fit')
 #         res = cos_fit_grid(field_season_array, lst_array, hour_means, hour_bins)
         res = cos_fit_grid_average(hour_means, hour_bins)
-        # TODO: Remove this print!
-        print('New!')
         print('Finished Cos Fit')
         ampl_season[season_i], phase_season[season_i] = res[0], res[1]
         ampl_cov_season[season_i], phase_cov_season[season_i] = res[2], res[3]
@@ -453,7 +451,11 @@ def make_four_panel(season_ds,
 def make_single_plot(data,
                 lats = None,
                 lons = None, 
+                ax = None,
+                fig = None,
                 title = r'$\Phi$',
+                ylabel = None,
+                xticks_bool = True,
                 axis = None,
                 cmap = plt.get_cmap('twilight'),
                 vmin = None,
@@ -465,9 +467,12 @@ def make_single_plot(data,
         lats = data['lat'].values
         lons = data['lon'].values
         data = data.values
-
-    fig = plt.figure(figsize = (10,3))
-    ax = plt.gca()
+    
+    if (fig is None) & (ax is None):
+        fig = plt.figure(figsize = (10,3))
+        ax = plt.gca()
+#     fig = plt.figure(figsize = (10,3))
+    
     def set_axis(ax, axis_list = axis):
         ax.set_xlim(axis_list[:2])
         ax.set_ylim(axis_list[2:])
@@ -478,11 +483,15 @@ def make_single_plot(data,
     im = m.pcolormesh(lons, lats, data, cmap = cmap, vmin = vmin, vmax = vmax)
 
     m.drawcoastlines()
-
-    m.drawparallels(range(int(np.floor(np.min(lats))), int(np.ceil(np.max(lats))), 30), 
-                    labels=[0,0,0,1])
-    m.drawmeridians(range(int(np.min(lons)), int(np.max(lons)), 40), 
-                    labels=[0,0,0,1])
+#     int(np.floor(np.min(lats)))
+    if xticks_bool:
+        parallel_labels = [0,0,0,1]
+    else:
+        parallel_labels = [0,0,0,0]
+    m.drawparallels(range(-30, int(np.ceil(np.max(lats))), 30), 
+                    labels=[0,1,0,1])
+    m.drawmeridians(range(int(np.min(lons)), int(np.max(lons)), 30), 
+                    labels=parallel_labels, rotation = 45)
     # plt.colorbar()
 
 #     ax.set_ylabel('Latitude')
@@ -490,12 +499,14 @@ def make_single_plot(data,
 #     plt.xlabel('Longitude')
     plt.xticks(rotation = 45)
     if title:
-        ax.set_title(title)
+        ax.set_title(title, weight = 'bold')
+    if not (ylabel is None):
+        ax.set_ylabel(ylabel, weight = 'bold')
     if axis: 
         set_axis(ax)
         
 
-    fig.colorbar(im, ax=ax)
+    fig.colorbar(im, ax=ax, fraction = 0.01, pad = 0.09)
     plt.tight_layout()
 #     plt.tight_layout()
     if save_fig_path:
