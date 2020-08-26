@@ -167,4 +167,19 @@ def get_path_to_desired_model_cmip5(path_to_model_dirs,
             if (filename_split[2] == desired_model):
                 desired_model_fnames.append(path_to_model_dirs + model_list[model_i])
 
-    return sorted(desired_model_fnames)
+                
+                
+                
+    # if dir contains multiple esemble members, we only want to select the most desired (otherwise we'll get repeated files)
+    all_desired_file_paths = []
+    ensembles_in_desired_paths = [_get_ensemble_from_path_cmip5(f_path) for f_path in desired_model_fnames]
+    for ensemble_member_ii in desired_ensemble_member:
+        if ensemble_member_ii in ensembles_in_desired_paths:
+            for i in range(len(ensembles_in_desired_paths)):
+                if ensembles_in_desired_paths[i] == ensemble_member_ii:
+                    all_desired_file_paths.append(desired_model_fnames[i])
+            break
+            
+    return sorted(all_desired_file_paths)
+
+#     return sorted(desired_model_fnames)

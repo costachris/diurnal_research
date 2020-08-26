@@ -16,7 +16,6 @@ import diurnal_config
 
 from diurnal_utils import *
 from fetch_model_helper import *
-from phaseDiagram import *
 
 # %run cmip_metrics.py
 
@@ -66,6 +65,29 @@ def mode_apply(df):
 #         df.round(round_precision)
 # def mode_apply_ampl(df, round_precision = 4):
 
+def _open_and_preprocess_gpm(input_data_dir_gpm,
+                             ds_land_sea,
+                             yearly_mean_bool):
+    ds_gpm = xr.open_dataset(input_data_dir_gpm +  'grid1_2000-06_2016-06_precip.nc')
+
+    if yearly_mean_bool:
+        ### compute means
+        # # take mean across seasons using circular mean for phase
+        ds_gpm_phase_year_mean = xr.apply_ufunc(phase_circmean, ds_gpm['phase_season'], 
+        #                                    kwargs = {'low' : 0.0, 'high' : 24.0},
+                                           input_core_dims=[["season"]], 
+                                           vectorize = True)
+        # compute yearly mean other data 
+        ds_gpm = ds_gpm.mean(dim = 'season')
+        ds_gpm['phase_season'] = ds_gpm_phase_year_mean
+
+    #########
+
+    ds_gpm['land_sea_mask'] = ds_land_sea['GLDAS_mask']
+    df_gpm = ds_gpm.to_dataframe()
+    
+    return df_gpm
+
 
 ### filtering functions for pd.DataFrames 
 def filter_by_lat(df, min_lat, max_lat, absolute_value = False):
@@ -111,7 +133,7 @@ def _get_mean_field(data_dir,
     Args
     -----
     data_dir - str
-        dir containing cmip models in folders
+        dir containing cmip models in seperate folders
         
     filter_lat - bool
         whether or not to filter by lat. 
@@ -239,7 +261,15 @@ def full_analysis(df_for_stats,
                   min_lat = None, 
                   max_lat = None, 
                   absolute_value = False,
-                  )
+                  ):
+    
+#     if not (season is None):
+#         df_for_stats = filter_by_season(df_for_stats, season)
+#         df_for_stats_true =  filter_by_season(df_for_stats_true, season)
+    
+    df_for_stats['ampl_season'] = df_for_stats['ampl_season'].apply(lambda x: x*FLUX_TO_MM_HR)
+    df_for_stats['mu_season'] = df_for_stats['mu_season'].apply(lambda x: x*FLUX_TO_MM_HR)
+    
     # split obs into land/sea 
     df_for_stats_true_land = df_for_stats_true[df_for_stats_true['land_sea_mask'] == 1]
     df_for_stats_true_water = df_for_stats_true[df_for_stats_true['land_sea_mask'] == 0]
@@ -253,23 +283,23 @@ def full_analysis(df_for_stats,
         df_for_stats_land = filter_by_lat(df_for_stats_land, 
                                           min_lat, 
                                           max_lat, 
-                                          absolute_value=absolute_values)
+                                          absolute_value=absolute_value)
         
         df_for_stats_true_land = filter_by_lat(df_for_stats_true_land, 
                                                min_lat, 
                                                max_lat, 
-                                               absolute_value=absolute_values)
+                                               absolute_value=absolute_value)
 
 
         df_for_stats_water = filter_by_lat(df_for_stats_water, 
                                            min_lat, 
                                            max_lat, 
-                                           absolute_value=absolute_values)
+                                           absolute_value=absolute_value)
         
         df_for_stats_true_water = filter_by_lat(df_for_stats_true_water, 
                                                 min_lat, 
                                                 max_lat, 
-                                                absolute_value=absolute_values)
+                                                absolute_value=absolute_value)
 
 
     
@@ -287,12 +317,18 @@ def full_analysis(df_for_stats,
                      agg_method = agg_method,
                      field = field,
                      additional_stats = True,)
-
+#     return(model_error_stats_df_water, cmip_sensitivities)
+    if 'season' in model_error_stats_df_water.index.names:
+        model_error_stats_df_water = model_error_stats_df_water.reset_index('season')
+        
+    if 'season' in model_error_stats_df_land.index.names:
+        model_error_stats_df_land = model_error_stats_df_land.reset_index('season')
+        
     all_stats_df_water = pd.merge(model_error_stats_df_water, cmip_sensitivities, 
                              how = 'left',
                              left_index = True, 
                              right_index = True)
-    all_stats_df_land = pd.merge(all_stats_df_land, cmip_sensitivities, 
+    all_stats_df_land = pd.merge(model_error_stats_df_land, cmip_sensitivities, 
                          how = 'left',
                          left_index = True, 
                          right_index = True)
@@ -302,7 +338,7 @@ def full_analysis(df_for_stats,
              how = 'left',
              left_index = True, 
              right_index = True)
-          all_stats_df_land = pd.merge(all_stats_df_land, field_means_df,
+        all_stats_df_land = pd.merge(all_stats_df_land, field_means_df,
              how = 'left',
              left_index = True, 
              right_index = True)
@@ -517,8 +553,11 @@ def land_sea_histogram(df,
     field_id_to_xlabel = {'phase_season': 'Phase [hours]',
                           'ampl_season': 'Amplitude'}
     if 'cmip_identifier' in df.columns:
-        sns.distplot(df[(df['land_sea_mask'] == 0) & (df['cmip_identifier'] == cmip_identifier)][field_id].values, label = cmip_identifier + ' ' + 'Water', bins = nbins, ax = ax)
-        sns.distplot(df[(df['land_sea_mask'] == 1) & (df['cmip_identifier'] == cmip_identifier)][field_id].values, label = cmip_identifier + ' ' + 'Land', bins = nbins, ax = ax)
+        df_water = df[(df['land_sea_mask'] == 0) & (df['cmip_identifier'] == cmip_identifier)][field_id]
+        
+        df_land = df[(df['land_sea_mask'] == 1) & (df['cmip_identifier'] == cmip_identifier)][field_id]
+        sns.distplot(df_water.values , label = cmip_identifier + ' ' + 'Water', bins = nbins, ax = ax)
+        sns.distplot(df_land.values , label = cmip_identifier + ' ' + 'Land', bins = nbins, ax = ax)
     else: 
         sns.distplot(df[(df['land_sea_mask'] == 0)][field_id].values, 
                      label = 'Water', 

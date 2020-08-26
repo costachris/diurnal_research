@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[16]:
+# In[1]:
 
 
 import os
@@ -28,7 +28,7 @@ from diurnal_utils import *
 # In[13]:
 
 
-out_folder_identifier = 'bin_pt2_hr_15_yr' #label to append to output path
+out_folder_identifier = 'bin_pt2_hr_15_yr_round' #label to append to output path
 
 start_date = '2000-06'
 # end_date = '2000-07'
