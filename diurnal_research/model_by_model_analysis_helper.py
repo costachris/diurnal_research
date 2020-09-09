@@ -60,6 +60,32 @@ def mode_apply(df):
     '''Scipy mode returns both mode and counts, os wrap function to only return mode. '''
     return mode(df)[0].item()
 
+def df_mean_lat_weighted(df, field_name):
+    '''Calculate mean of field in Dataframe, weighting by cos(latitude)
+    
+    
+    Args
+    -----
+    df - pd.DataFrame
+        Dataframe containing field to find mean of (with id = `field_name`) and `lat` 
+        as an index or standard column. 
+        
+    Returns
+    --------
+    weighted_mean - float
+    
+    '''
+    if 'lat' in df.index.names:
+        df = df.reset_index()
+    
+    weights = np.cos(np.deg2rad(df['lat']))
+    
+    num_sum = (weights * df[field_name]).sum()
+    denom_sum = weights.sum()
+    
+    return num_sum/denom_sum
+
+
 # def mode_apply_phase(df, round_precision = 1):
 #     '''Handle binning of data before taking mode for given variables'''
 #         df.round(round_precision)
@@ -126,7 +152,9 @@ def _get_mean_field(data_dir,
                     file_name = '1985-01_2006-01_mean.nc',
                     filter_lat = False,
                     landsea_mask_df = None,
+                    var_mask_df = None,
                     landsea_bool = None,
+                    weighted_mean_bool = True,
                     **kwargs):
     '''Given path to cmip files (with subdirs for each model),
     take mean of each model and return dataframe.
@@ -140,9 +168,12 @@ def _get_mean_field(data_dir,
     landsea_mask_df - pd.DataFrame
         Pandas dataframe containing lat/lon as multiindex keys and 
         mask as column (0 for water, 1 for land). df should only
-        contain one column. ``
+        contain one column. 
+    var_mask_df - only compute averages where mask is 1
     landsea_bool - bool 
         If 1 return land only, if 0 return sea only. 
+    weighted_mean_bool - bool
+        Weight field by cos(lat) if true when computing mean. 
             
     **kwargs
         keyword arguments to be past to lat filtering function
@@ -166,6 +197,7 @@ def _get_mean_field(data_dir,
                                          left_index = True, 
                                          right_index = True)
                 landsea_mask_id = landsea_mask_df.columns[0]
+                
                 # select land
                 if landsea_bool == 1:
                     df_field_mask = \
@@ -176,14 +208,37 @@ def _get_mean_field(data_dir,
                     df_field_mask = \
                         df_field_mask[df_field_mask[landsea_mask_id] == 0]
                 
+                
+                 # apply other mask, if specified
+                if not (var_mask_df is None):
+                    var_mask_id = var_mask_df.columns[0]
+                    df_field_mask = pd.merge(df_field_mask, var_mask_df,
+                                         how = 'left',
+                                         left_index = True, 
+                                         right_index = True)
+                    
+                    df_field_mask = \
+                        df_field_mask[df_field_mask[var_mask_id] == 1]
+                
+                
                 df_field = df_field_mask.loc[:,field_name]
+                
+               
+                
                 
             if filter_lat:
                 df_field_filtered = filter_by_lat(df_field, **kwargs)
-                var_dict[model_name] = df_field_filtered[field_name].mean()
+                if weighted_mean_bool:
+                    var_dict[model_name] = df_mean_lat_weighted(df_field_filtered, field_name)
+                else:
+                    var_dict[model_name] = df_field_filtered[field_name].mean()
 #                 return df_field_filtered
+            
             else:
-                var_dict[model_name] = ds_field[field_name].mean().item()
+                if weighed_mean_bool: 
+                    var_dict[model_name] = df_mean_lat_weighted(df_field, field_name)
+                else:
+                    var_dict[model_name] = df_field[field_name].mean()
             
 
         except Exception as e: 
@@ -258,6 +313,7 @@ def full_analysis(df_for_stats,
                   field_means_df = None,
                   field = 'phase_season',
                   agg_method = 'mode',
+                  var_mask_df = None,
                   min_lat = None, 
                   max_lat = None, 
                   absolute_value = False,
@@ -267,8 +323,8 @@ def full_analysis(df_for_stats,
 #         df_for_stats = filter_by_season(df_for_stats, season)
 #         df_for_stats_true =  filter_by_season(df_for_stats_true, season)
     
-    df_for_stats['ampl_season'] = df_for_stats['ampl_season'].apply(lambda x: x*FLUX_TO_MM_HR)
-    df_for_stats['mu_season'] = df_for_stats['mu_season'].apply(lambda x: x*FLUX_TO_MM_HR)
+    df_for_stats.loc[:,'ampl_season'] = df_for_stats['ampl_season'].apply(lambda x: x*FLUX_TO_MM_HR)
+    df_for_stats.loc[:,'mu_season'] = df_for_stats['mu_season'].apply(lambda x: x*FLUX_TO_MM_HR)
     
     # split obs into land/sea 
     df_for_stats_true_land = df_for_stats_true[df_for_stats_true['land_sea_mask'] == 1]
@@ -300,8 +356,27 @@ def full_analysis(df_for_stats,
                                                 min_lat, 
                                                 max_lat, 
                                                 absolute_value=absolute_value)
+    # apply other mask, if specified
+    if not (var_mask_df is None):
+        var_mask_id = var_mask_df.columns[0]
+        df_for_stats_water = pd.merge(df_for_stats_water, var_mask_df,
+                             how = 'left',
+                             left_index = True, 
+                             right_index = True)
 
+        df_for_stats_water = \
+            df_for_stats_water[df_for_stats_water[var_mask_id] == 1]
+        
 
+        df_for_stats_true_water = pd.merge(df_for_stats_true_water, var_mask_df,
+                             how = 'left',
+                             left_index = True, 
+                             right_index = True)
+
+        df_for_stats_true_water = \
+            df_for_stats_true_water[df_for_stats_true_water[var_mask_id] == 1]
+
+#         return df_for_stats_water, None
     
 
     model_error_stats_df_land = compute_stats(df_for_stats_land,
@@ -600,7 +675,7 @@ def plot_corr_matrix(corr_mat_ds,
     if title:
         plt.title(title)
     upper_tr_mask = np.triu(corr_mat_ds.corr())
-    sns.heatmap(corr_mat_ds.corr(), annot = True, 
+    sns.heatmap(corr_mat_ds.corr(), annot = True, cmap = 'RdBu_r',
                 vmin = -1, vmax = 1, center = 0, fmt='.2g',
                 mask = upper_tr_mask)
     plt.tight_layout()
