@@ -398,6 +398,7 @@ def full_analysis(df_for_stats,
                   field_means_df = None,
                   field = 'phase_season',
                   agg_method = 'mode',
+                  error_stats = False,
                   var_mask_df = None,
                   min_lat = None, 
                   max_lat = None, 
@@ -481,12 +482,14 @@ def full_analysis(df_for_stats,
                  df_for_stats_true_land,
                  field = field,
                  agg_method = agg_method,
+                 error_stats = error_stats,                           
                  additional_stats = True,)
 
     ### compute stats for land/water
     model_error_stats_df_water = compute_stats(df_for_stats_water,
                      df_for_stats_true_water,
                      agg_method = agg_method,
+                     error_stats = error_stats,
                      field = field,
                      additional_stats = True,)
 #     return(model_error_stats_df_water, cmip_sensitivities)
@@ -626,16 +629,17 @@ def compute_stats(df_for_stats,
             rmse_i = circrmse(df_i[field], df_true_field)
             model_i_corr = np.corrcoef(sin_hour(df_i[field].values), 
                                    sin_hour(df_true_field.values))[0,1]
+            model_i_std = circstd(df_i[field].values, low = 0.0, high = 24.0)
         else:
             rmse_i = np.nan
             model_i_corr = np.nan
-
-
-        
+            model_i_std = np.nan
 
         
 
-        model_i_std = circstd(df_i[field].values, low = 0.0, high = 24.0)
+        
+
+       
 
 
         # To Do

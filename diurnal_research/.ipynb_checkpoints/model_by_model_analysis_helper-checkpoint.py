@@ -24,7 +24,11 @@ import matplotlib
 FLUX_TO_MM_HR = 60*60
 HOURS_TO_RADIANS = 2*np.pi/24
 
-
+FLUX_TO_MM_HR = 60*60
+MM_HR_TO_MM_DAY = 24.0
+MM_HR_TO_MM_YR = 24*365
+FLUX_TO_MM_YR = FLUX_TO_MM_HR*MM_HR_TO_MM_YR
+FLUX_TO_MM_DAY = FLUX_TO_MM_HR*MM_HR_TO_MM_DAY
 
 
 def circdiff(A,B, max_val = 24.0):
@@ -147,6 +151,68 @@ def filter_by_season(df, season):
     
     
 ####### ds operators 
+def _create_mask_for_all_models(model_list,
+                                **kwargs):
+    var_dict = {}
+    for model_name in model_list: 
+        var_dict[model_name] = _create_mask_from_model(model_name = model_name,
+                                            **kwargs)
+    out_df = pd.concat(var_dict)
+    # label model index and reset
+    idx_names = list(out_df.index.names)
+    idx_names[0] = 'model_name'
+    out_df.index.names = idx_names
+    
+    out_df = out_df.reset_index(['model_name'])
+    
+    return out_df
+
+def _create_mask_from_model(data_dir, 
+                            model_name,
+                            field_to_mask = 'pr',
+                            field_threshold = 1.0,
+                            unit_conversion = FLUX_TO_MM_DAY,
+                            operator = 'lt', 
+                            file_name = 'grid1_1985-01_2006-01_mean.nc'):
+    '''
+    Given path to model NetCDF, field, and theshold. Create mask from model.
+    Args
+    ------
+    data_dir - str
+        dir containing cmip models in seperate folders
+    model_name - str
+        Name of model to compute mask for
+    field_to_mask - str
+        Name of field to compute mask
+    field_threshold - float
+        Field threshold
+    operator - str {'lt', 'gt'}
+        Mask based on values < ('lt') or > ('gt') threshold
+        
+    Returns
+    --------
+        mask - pd.DataFrame 
+            Mask containing 1 where condition is true and 0 elsewhere. 
+    '''
+    
+    ds_field = xr.open_dataset(data_dir + model_name + '/' + file_name)
+    
+    if not (unit_conversion is None):
+        ds_field[field_to_mask] = ds_field[field_to_mask]*unit_conversion
+    
+    # mask 
+    if operator == 'lt':
+        field_where = ds_field[field_to_mask].where(ds_field[field_to_mask] < field_threshold)
+    elif operator == 'gt':
+        field_where = ds_field[field_to_mask].where(ds_field[field_to_mask] > field_threshold)
+
+
+    field_mask = (field_where > 0)
+    field_mask.name = 'mask'
+    field_mask_df = field_mask.to_dataframe()
+   
+    return field_mask_df
+
 def _get_mean_field(data_dir,
                     field_name = 'rlut',
                     file_name = '1985-01_2006-01_mean.nc',
@@ -169,7 +235,11 @@ def _get_mean_field(data_dir,
         Pandas dataframe containing lat/lon as multiindex keys and 
         mask as column (0 for water, 1 for land). df should only
         contain one column. 
-    var_mask_df - only compute averages where mask is 1
+    var_mask_df - pd.DataFrame or 'auto'
+        only compute averages where mask is 1. Either provide mask 
+        dataframe or 'auto'. Setting 'auto' will use
+        `_create_mask_from_model` to automatically generate a seperate
+        mask for each model. 
     landsea_bool - bool 
         If 1 return land only, if 0 return sea only. 
     weighted_mean_bool - bool
@@ -211,6 +281,11 @@ def _get_mean_field(data_dir,
                 
                  # apply other mask, if specified
                 if not (var_mask_df is None):
+                    if type(var_mask_df) == dict:
+                        var_mask_df = _create_mask_from_model(
+                                        model_name = model_name,
+                                        **var_mask_df)
+                        
                     var_mask_id = var_mask_df.columns[0]
                     df_field_mask = pd.merge(df_field_mask, var_mask_df,
                                          how = 'left',
@@ -220,7 +295,7 @@ def _get_mean_field(data_dir,
                     df_field_mask = \
                         df_field_mask[df_field_mask[var_mask_id] == 1]
                 
-                
+                    
                 df_field = df_field_mask.loc[:,field_name]
                 
                
@@ -250,6 +325,7 @@ def _get_mean_field(data_dir,
 def _get_mean_fields(
     field_names,
     mean_fields_to_rel_path_map,
+    var_mask_df = None,
     **kwargs):
     '''Apply _get_mean_field over a sequence of variables
     and return a single DataFrame.
@@ -267,6 +343,7 @@ def _get_mean_fields(
         dfs_to_concat.append(_get_mean_field(
                             data_dir = data_dir, 
                             field_name = field_name, 
+                            var_mask_df = var_mask_df,
                             **kwargs))
     return pd.concat(dfs_to_concat, axis = 1)
 
@@ -303,7 +380,15 @@ def _merge_models_into_df(model_names, input_data_dir,
     return df
 
 
-# def fetch_means_n_35:
+def _merge_df_on_model_name(df1, df2):
+    '''Merge Dataframes on lat, lon, and model name. Assumes 
+    ('lat', 'lon') are Multilevel indices in both Dataframes.'''
+    df1 = df1.reset_index()
+    
+    df_merged = pd.merge(df1, df2,
+                         how = 'left',
+                         on = ['lat', 'lon', 'model_name'])
+    return df_merged.set_index(['lat','lon'])
     
     
     
@@ -313,6 +398,7 @@ def full_analysis(df_for_stats,
                   field_means_df = None,
                   field = 'phase_season',
                   agg_method = 'mode',
+                  error_stats = False,
                   var_mask_df = None,
                   min_lat = None, 
                   max_lat = None, 
@@ -323,8 +409,11 @@ def full_analysis(df_for_stats,
 #         df_for_stats = filter_by_season(df_for_stats, season)
 #         df_for_stats_true =  filter_by_season(df_for_stats_true, season)
     
-    df_for_stats.loc[:,'ampl_season'] = df_for_stats['ampl_season'].apply(lambda x: x*FLUX_TO_MM_HR)
-    df_for_stats.loc[:,'mu_season'] = df_for_stats['mu_season'].apply(lambda x: x*FLUX_TO_MM_HR)
+    df_for_stats = df_for_stats.copy()
+    df_for_stats_true = df_for_stats_true.copy()
+    
+    df_for_stats.loc[:,'ampl_season'] = df_for_stats['ampl_season'].apply(lambda x: x*FLUX_TO_MM_DAY)
+    df_for_stats.loc[:,'mu_season'] = df_for_stats['mu_season'].apply(lambda x: x*FLUX_TO_MM_DAY)
     
     # split obs into land/sea 
     df_for_stats_true_land = df_for_stats_true[df_for_stats_true['land_sea_mask'] == 1]
@@ -356,40 +445,51 @@ def full_analysis(df_for_stats,
                                                 min_lat, 
                                                 max_lat, 
                                                 absolute_value=absolute_value)
+#     return df_for_stats_water, None
     # apply other mask, if specified
     if not (var_mask_df is None):
-        var_mask_id = var_mask_df.columns[0]
-        df_for_stats_water = pd.merge(df_for_stats_water, var_mask_df,
-                             how = 'left',
-                             left_index = True, 
-                             right_index = True)
+        
+#         var_mask_id = var_mask_df.columns[0]
+        var_mask_id = 'mask'
+        # merge seperate mask for each model
+        if 'model_name' in var_mask_df:
+            df_for_stats_water = _merge_df_on_model_name(df_for_stats_water, var_mask_df)
+        # TODO: if different mask for each model, which to use for satellite?
+#             df_for_stats_true_water = _merge_df_on_model_name(df_for_stats_true_water, var_mask_df)
+        
+        # merge single mask for all models
+        else:
+            df_for_stats_water = pd.merge(df_for_stats_water, var_mask_df,
+                                 how = 'left',
+                                 left_index = True, 
+                                 right_index = True)
+
+#             df_for_stats_true_water = pd.merge(df_for_stats_true_water, var_mask_df,
+#                                  how = 'left',
+#                                  left_index = True, 
+#                                  right_index = True)
 
         df_for_stats_water = \
             df_for_stats_water[df_for_stats_water[var_mask_id] == 1]
         
+#         df_for_stats_true_water = \
+#             df_for_stats_true_water[df_for_stats_true_water[var_mask_id] == 1]
 
-        df_for_stats_true_water = pd.merge(df_for_stats_true_water, var_mask_df,
-                             how = 'left',
-                             left_index = True, 
-                             right_index = True)
-
-        df_for_stats_true_water = \
-            df_for_stats_true_water[df_for_stats_true_water[var_mask_id] == 1]
-
-#         return df_for_stats_water, None
+#     return df_for_stats_water, None
     
 
     model_error_stats_df_land = compute_stats(df_for_stats_land,
                  df_for_stats_true_land,
                  field = field,
                  agg_method = agg_method,
+                 error_stats = error_stats,                           
                  additional_stats = True,)
-
 
     ### compute stats for land/water
     model_error_stats_df_water = compute_stats(df_for_stats_water,
                      df_for_stats_true_water,
                      agg_method = agg_method,
+                     error_stats = error_stats,
                      field = field,
                      additional_stats = True,)
 #     return(model_error_stats_df_water, cmip_sensitivities)
@@ -529,16 +629,17 @@ def compute_stats(df_for_stats,
             rmse_i = circrmse(df_i[field], df_true_field)
             model_i_corr = np.corrcoef(sin_hour(df_i[field].values), 
                                    sin_hour(df_true_field.values))[0,1]
+            model_i_std = circstd(df_i[field].values, low = 0.0, high = 24.0)
         else:
             rmse_i = np.nan
             model_i_corr = np.nan
-
-
-        
+            model_i_std = np.nan
 
         
 
-        model_i_std = circstd(df_i[field].values, low = 0.0, high = 24.0)
+        
+
+       
 
 
         # To Do
