@@ -50,8 +50,8 @@ def phase_circmean_internal(samples, high=24.0, low=0.0):
     '''Compute mean of circular quantity. '''
     samples = np.asarray(samples)
     
-    sin_samp = np.sin((samples - low)*2.*pi / (high - low))
-    cos_samp = np.cos((samples - low)*2.*pi / (high - low))
+    sin_samp = np.sin((samples - low)*2.*np.pi / (high - low))
+    cos_samp = np.cos((samples - low)*2.*np.pi / (high - low))
     
 #     samples, sin_samp, cos_samp, nmask = _circfuncs_common(samples, high, low,
 #                                                            nan_policy=nan_policy)
@@ -60,19 +60,30 @@ def phase_circmean_internal(samples, high=24.0, low=0.0):
     cos_sum = cos_samp.sum()
     res = np.arctan2(sin_sum, cos_sum)
     
-    return res*(high - low)/2.0/pi + low
+    # if angle is <0 (clockwise on unit circle), 
+    # switch to equivalent positive (counter clockwise) angle
+    if res < 0:
+        res = 2*np.pi + res
+    
+    return res*(high - low)/2.0/np.pi + low
     
 def lat_weighted_circ_mean(df, field_name, high=24.0, low=0.0):
     '''Given dataframe with circular quantity, find lat weighted mean. '''
     samples = np.asarray(df[field_name])
     
-    sin_samp = np.sin((samples - low)*2.*pi / (high - low))
-    cos_samp = np.cos((samples - low)*2.*pi / (high - low))
+    sin_samp = np.sin((samples - low)*2.*np.pi / (high - low))
+    cos_samp = np.cos((samples - low)*2.*np.pi / (high - low))
     
     if 'lat' in df.index.names:
         df = df.reset_index()
     
     weights = np.cos(np.deg2rad(df['lat']))
+    
+    
+#     sin_ave = np.average(sin_samp, weights = weights)
+#     cos_ave = np.average(cos_samp, weights = weights)
+#     res = np.arctan2(sin_ave, cos_ave)
+
     weights_sum = weights.sum()
     
     num_sum_sin = (weights * sin_samp).sum()
@@ -80,7 +91,12 @@ def lat_weighted_circ_mean(df, field_name, high=24.0, low=0.0):
     
     res = np.arctan2(num_sum_sin/weights_sum, num_sum_cos/weights_sum)
     
-    return res*(high - low)/2.0/pi + low
+    # if angle is <0 (clockwise on unit circle), 
+    # switch to equivalent positive (counter clockwise) angle
+    if res < 0:
+        res = 2*np.pi + res
+    
+    return res*(high - low)/2.0/np.pi + low
     
 
 def hour_circstd(arr):
@@ -513,7 +529,7 @@ def full_analysis(df_for_stats,
 #         df_for_stats_true_water = \
 #             df_for_stats_true_water[df_for_stats_true_water[var_mask_id] == 1]
 
-#     return df_for_stats_land, None
+#     return df_for_stats_water, None
     
 
     model_error_stats_df_land = compute_stats(df_for_stats_land,
@@ -607,6 +623,9 @@ def compute_stats(df_for_stats,
             Dataframe containing all error stats
     
     '''
+    df_for_stats = df_for_stats.copy()
+    df_for_stats_true = df_for_stats_true.copy()
+    
     model_error_stats = {}
     
     # logic for handling seasonal breakdowns
@@ -637,10 +656,15 @@ def compute_stats(df_for_stats,
     if agg_method == 'mean':
 
 #         agg_field_by_model = df_for_stats.groupby(groupby_vars).mean()
-        agg_field_by_model = df_for_stats.groupby(groupby_vars).agg(df_mean_lat_weighted, field_name = 'ampl_season')
-
-        agg_phase_by_model = df_for_stats[_variables_of_interest].groupby(groupby_vars).agg(lat_weighted_circ_mean, field_name = 'phase_season')
-    
+        agg_field_by_model = df_for_stats.groupby(groupby_vars).apply(df_mean_lat_weighted, field_name = 'ampl_season')
+        agg_field_by_model = pd.DataFrame(agg_field_by_model)
+        agg_field_by_model = agg_field_by_model.rename({0:'ampl_season'}, axis = 1)
+        
+        agg_phase_by_model = df_for_stats[_variables_of_interest].groupby(groupby_vars).apply(lat_weighted_circ_mean, field_name = 'phase_season')
+        agg_phase_by_model = pd.DataFrame(agg_phase_by_model)
+        agg_phase_by_model = agg_phase_by_model.rename({0:'phase_season'}, axis = 1)
+        
+        
     elif agg_method == 'mode':
 #         print('here')
         agg_field_by_model = df_for_stats[_variables_of_interest].round(ampl_bin_precision).groupby(groupby_vars).agg(mode_apply)
@@ -822,12 +846,18 @@ def plot_corr_matrix(corr_mat_ds,
                 mask = upper_tr_mask)
     plt.tight_layout()
     
+
     
+# def summary_stats_for_df(df, agg_method = 'mode'):
+#     '''Given a pd.DataFrame, compute summary stats (mean or mode)'''
+# #     if agg_method = 
+# #     i
 
 def make_phase_plot(water_df,
                     land_df,
                     obs_water_df,
                     obs_land_df, 
+                    title = r'Diurnal Phase [hr] & Amplitude [$\frac{mm}{yr}$] for CMIP6 and IMERG',
                     figsize = (13,8),
                     markersize = 2,
                     textsize = 8,
@@ -923,7 +953,7 @@ def make_phase_plot(water_df,
     leg = plt.legend(loc = 'center left', bbox_to_anchor=(1.1,0.5), prop={'size': 11}, handlelength = 0, markerscale = 0.8)
 
 
-    plt.title(r'Diurnal Phase [hr] & Amplitude [$\frac{mm}{yr}$] for CMIP5 and IMERG', weight = 'bold')
+    plt.title(title, weight = 'bold')
     
 
 
