@@ -45,6 +45,44 @@ def phase_circmean(arr):
     '''Use scipy circmean to calcualte circular mean of array of hours [0, 24]'''
     return circmean(arr, low =  0.0, high = 24.0)
 
+
+def phase_circmean_internal(samples, high=24.0, low=0.0):
+    '''Compute mean of circular quantity. '''
+    samples = np.asarray(samples)
+    
+    sin_samp = np.sin((samples - low)*2.*pi / (high - low))
+    cos_samp = np.cos((samples - low)*2.*pi / (high - low))
+    
+#     samples, sin_samp, cos_samp, nmask = _circfuncs_common(samples, high, low,
+#                                                            nan_policy=nan_policy)
+
+    sin_sum = sin_samp.sum()
+    cos_sum = cos_samp.sum()
+    res = np.arctan2(sin_sum, cos_sum)
+    
+    return res*(high - low)/2.0/pi + low
+    
+def lat_weighted_circ_mean(df, field_name, high=24.0, low=0.0):
+    '''Given dataframe with circular quantity, find lat weighted mean. '''
+    samples = np.asarray(df[field_name])
+    
+    sin_samp = np.sin((samples - low)*2.*pi / (high - low))
+    cos_samp = np.cos((samples - low)*2.*pi / (high - low))
+    
+    if 'lat' in df.index.names:
+        df = df.reset_index()
+    
+    weights = np.cos(np.deg2rad(df['lat']))
+    weights_sum = weights.sum()
+    
+    num_sum_sin = (weights * sin_samp).sum()
+    num_sum_cos = (weights * cos_samp).sum()
+    
+    res = np.arctan2(num_sum_sin/weights_sum, num_sum_cos/weights_sum)
+    
+    return res*(high - low)/2.0/pi + low
+    
+
 def hour_circstd(arr):
     '''Use scipy circstd to calcualte circular mean of array of hours [0, 24]'''
     return circstd(arr, low = 0.0, high = 24.0)
@@ -475,7 +513,7 @@ def full_analysis(df_for_stats,
 #         df_for_stats_true_water = \
 #             df_for_stats_true_water[df_for_stats_true_water[var_mask_id] == 1]
 
-#     return df_for_stats_water, None
+#     return df_for_stats_land, None
     
 
     model_error_stats_df_land = compute_stats(df_for_stats_land,
@@ -536,7 +574,8 @@ def compute_stats(df_for_stats,
                  pr_dict = None,
                  clt_dict = None):
     '''Given pd.DataFrames containing cmip model and satellite diurnal cycle indicies, compute various error statistics
-    and return dataframe. Circular statistics are used for the phase field.
+    and return dataframe. Circular statistics are used for the phase field. Note: when agg method = `mean`
+    quantities are weighted by cos(lat)
     
     Args
     -----------
@@ -553,6 +592,7 @@ def compute_stats(df_for_stats,
         
         agg_method - str in {'mean', 'mode'}
             method for aggregating field. Means are circular for phase. 
+            When agg method = `mean` quantities are weighted by cos(lat).
         
         additional_stats - bool
             #TODO: right now this has to be true!
@@ -595,10 +635,11 @@ def compute_stats(df_for_stats,
     ampl_bin_precision = 4
     
     if agg_method == 'mean':
-    #     mean_field_by_model = df_for_stats.groupby('model_name').mean()
-        agg_field_by_model = df_for_stats.groupby(groupby_vars).mean()
-    #     circmean_phase_by_model = df_for_stats[['phase_season', 'model_name']].groupby('model_name').apply(phase_circmean)
-        agg_phase_by_model = df_for_stats[_variables_of_interest].groupby(groupby_vars).agg(phase_circmean)
+
+#         agg_field_by_model = df_for_stats.groupby(groupby_vars).mean()
+        agg_field_by_model = df_for_stats.groupby(groupby_vars).agg(df_mean_lat_weighted, field_name = 'ampl_season')
+
+        agg_phase_by_model = df_for_stats[_variables_of_interest].groupby(groupby_vars).agg(lat_weighted_circ_mean, field_name = 'phase_season')
     
     elif agg_method == 'mode':
 #         print('here')
@@ -798,14 +839,14 @@ def make_phase_plot(water_df,
     
     taylor_diag = PhaseDiagram(fig = fig, 
                               label = 'IMERG', 
-                              y_lim=(0, 4),
+                              y_lim=(0, 1),
                               radial_label_pos = 0
                               )
     taylor_diag.add_grid()
     
     # calculate obs phase mode
-    ampl_observed_water = mode_apply(obs_water_df['ampl_season'].round(4)* ampl_unit_conversion_factor)
-    ampl_observed_land = mode_apply(obs_land_df['ampl_season'].round(4)* ampl_unit_conversion_factor)
+    ampl_observed_water = mode_apply(obs_water_df['ampl_season'].round(4))
+    ampl_observed_land = mode_apply(obs_land_df['ampl_season'].round(4))
     
 
     if normalize_ampl:
@@ -835,7 +876,7 @@ def make_phase_plot(water_df,
     for model_name_i in range(len(model_list)):
 
         phase_i = water_df.loc[model_list[model_name_i],:]['phase_mean']
-        ampl_i = water_df.loc[model_list[model_name_i],:]['ampl_mean'] * ampl_unit_conversion_factor
+        ampl_i = water_df.loc[model_list[model_name_i],:]['ampl_mean']
 
         if normalize_ampl:
             ampl_i = ampl_i/ampl_observed_water
@@ -857,7 +898,7 @@ def make_phase_plot(water_df,
     ## Plot model phase/ampl over land
     for model_name_i in range(len(model_list)):
         phase_i = land_df.loc[model_list[model_name_i],:]['phase_mean']
-        ampl_i = land_df.loc[model_list[model_name_i],:]['ampl_mean'] * ampl_unit_conversion_factor
+        ampl_i = land_df.loc[model_list[model_name_i],:]['ampl_mean']
 
         if normalize_ampl:
             ampl_i = ampl_i/ampl_observed_land
