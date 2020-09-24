@@ -848,20 +848,34 @@ def plot_corr_matrix(corr_mat_ds,
     
 
     
-# def summary_stats_for_df(df, agg_method = 'mode'):
-#     '''Given a pd.DataFrame, compute summary stats (mean or mode)'''
-# #     if agg_method = 
-# #     i
+def summary_stats_for_df(df, 
+                         agg_method = 'mode',
+                         phase_bin_precision = 1,
+                         ampl_bin_precision = 4):
+    '''Given a pd.DataFrame, compute summary stats for 
+    amplitude and phase (mean or mode). '''
+    if agg_method == 'mode': 
+        ampl_agg = mode_apply(df['ampl_season'].round(ampl_bin_precision))
+        phase_agg = mode_apply(df['phase_season'].round(phase_bin_precision))
+    if agg_method == 'mean':
+        ampl_agg = df_mean_lat_weighted(df, 'ampl_season')
+        phase_agg = lat_weighted_circ_mean(df, 'phase_season')
+        
+    return (ampl_agg, phase_agg)
+
+
 
 def make_phase_plot(water_df,
                     land_df,
                     obs_water_df,
                     obs_land_df, 
-                    title = r'Diurnal Phase [hr] & Amplitude [$\frac{mm}{yr}$] for CMIP6 and IMERG',
+                    agg_method = 'mean',
+                    title = r'Diurnal Phase [hr] & Amplitude [$\frac{mm}{day}$] for CMIP6 and IMERG',
+                    y_lim = (0, 1),
                     figsize = (13,8),
                     markersize = 2,
                     textsize = 8,
-                    normalize_ampl = True,
+                    normalize_ampl = False,
                     ampl_unit_conversion_factor = 1.0):
     
     fig = plt.figure(figsize = figsize)
@@ -869,15 +883,25 @@ def make_phase_plot(water_df,
     
     taylor_diag = PhaseDiagram(fig = fig, 
                               label = 'IMERG', 
-                              y_lim=(0, 1),
+                              y_lim=y_lim,
                               radial_label_pos = 0
                               )
     taylor_diag.add_grid()
     
     # calculate obs phase mode
-    ampl_observed_water = mode_apply(obs_water_df['ampl_season'].round(4))
-    ampl_observed_land = mode_apply(obs_land_df['ampl_season'].round(4))
     
+    ampl_observed_water, phase_observed_water = summary_stats_for_df(obs_water_df, 
+                                                                     agg_method = agg_method)
+    
+    ampl_observed_land, phase_observed_land = summary_stats_for_df(obs_land_df, 
+                                                                   agg_method = agg_method)
+    
+    
+#     ampl_observed_water = mode_apply(obs_water_df['ampl_season'].round(4))
+#     ampl_observed_land = mode_apply(obs_land_df['ampl_season'].round(4))
+    
+#     phase_observed_water = mode_apply(obs_water_df['phase_season'].round(1)
+#     phase_observed_land = mode_apply(obs_water_df['phase_season'].round(1))
 
     if normalize_ampl:
         ampl_to_plot_water = 1.0
@@ -885,15 +909,16 @@ def make_phase_plot(water_df,
     else:
         ampl_to_plot_water = ampl_observed_water
         ampl_to_plot_land = ampl_observed_land
-
-    taylor_diag.add_sample(phase = mode_apply(obs_water_df['phase_season'].round(1)), 
+    
+    print(ampl_to_plot_water)
+    taylor_diag.add_sample(phase = phase_observed_water, 
                                ampl = ampl_to_plot_water, 
                                marker = '*', 
                                c = 'b',
                                label = 'IMERG-Water', 
                                markersize = 13)
 
-    taylor_diag.add_sample(phase = mode_apply(obs_water_df['phase_season'].round(1)), 
+    taylor_diag.add_sample(phase = phase_observed_land, 
                                ampl = ampl_to_plot_land, 
                                marker = '*', 
                                c = 'g',
@@ -948,7 +973,10 @@ def make_phase_plot(water_df,
                              size = textsize,
                              weight = 'bold')
 
-
+    ax = plt.gca()
+    ax.text(-.1, ax.get_rmax()/2.,r'Amplitude [$\frac{mm}{day}$]',
+        rotation=90, ha='center',va='center')
+    plt.xlabel('Local Solar Time [Hours]', weight = 'bold')
 
     leg = plt.legend(loc = 'center left', bbox_to_anchor=(1.1,0.5), prop={'size': 11}, handlelength = 0, markerscale = 0.8)
 

@@ -45,6 +45,60 @@ def phase_circmean(arr):
     '''Use scipy circmean to calcualte circular mean of array of hours [0, 24]'''
     return circmean(arr, low =  0.0, high = 24.0)
 
+
+def phase_circmean_internal(samples, high=24.0, low=0.0):
+    '''Compute mean of circular quantity. '''
+    samples = np.asarray(samples)
+    
+    sin_samp = np.sin((samples - low)*2.*np.pi / (high - low))
+    cos_samp = np.cos((samples - low)*2.*np.pi / (high - low))
+    
+#     samples, sin_samp, cos_samp, nmask = _circfuncs_common(samples, high, low,
+#                                                            nan_policy=nan_policy)
+
+    sin_sum = sin_samp.sum()
+    cos_sum = cos_samp.sum()
+    res = np.arctan2(sin_sum, cos_sum)
+    
+    # if angle is <0 (clockwise on unit circle), 
+    # switch to equivalent positive (counter clockwise) angle
+    if res < 0:
+        res = 2*np.pi + res
+    
+    return res*(high - low)/2.0/np.pi + low
+    
+def lat_weighted_circ_mean(df, field_name, high=24.0, low=0.0):
+    '''Given dataframe with circular quantity, find lat weighted mean. '''
+    samples = np.asarray(df[field_name])
+    
+    sin_samp = np.sin((samples - low)*2.*np.pi / (high - low))
+    cos_samp = np.cos((samples - low)*2.*np.pi / (high - low))
+    
+    if 'lat' in df.index.names:
+        df = df.reset_index()
+    
+    weights = np.cos(np.deg2rad(df['lat']))
+    
+    
+#     sin_ave = np.average(sin_samp, weights = weights)
+#     cos_ave = np.average(cos_samp, weights = weights)
+#     res = np.arctan2(sin_ave, cos_ave)
+
+    weights_sum = weights.sum()
+    
+    num_sum_sin = (weights * sin_samp).sum()
+    num_sum_cos = (weights * cos_samp).sum()
+    
+    res = np.arctan2(num_sum_sin/weights_sum, num_sum_cos/weights_sum)
+    
+    # if angle is <0 (clockwise on unit circle), 
+    # switch to equivalent positive (counter clockwise) angle
+    if res < 0:
+        res = 2*np.pi + res
+    
+    return res*(high - low)/2.0/np.pi + low
+    
+
 def hour_circstd(arr):
     '''Use scipy circstd to calcualte circular mean of array of hours [0, 24]'''
     return circstd(arr, low = 0.0, high = 24.0)
@@ -536,7 +590,8 @@ def compute_stats(df_for_stats,
                  pr_dict = None,
                  clt_dict = None):
     '''Given pd.DataFrames containing cmip model and satellite diurnal cycle indicies, compute various error statistics
-    and return dataframe. Circular statistics are used for the phase field.
+    and return dataframe. Circular statistics are used for the phase field. Note: when agg method = `mean`
+    quantities are weighted by cos(lat)
     
     Args
     -----------
@@ -553,6 +608,7 @@ def compute_stats(df_for_stats,
         
         agg_method - str in {'mean', 'mode'}
             method for aggregating field. Means are circular for phase. 
+            When agg method = `mean` quantities are weighted by cos(lat).
         
         additional_stats - bool
             #TODO: right now this has to be true!
@@ -567,6 +623,9 @@ def compute_stats(df_for_stats,
             Dataframe containing all error stats
     
     '''
+    df_for_stats = df_for_stats.copy()
+    df_for_stats_true = df_for_stats_true.copy()
+    
     model_error_stats = {}
     
     # logic for handling seasonal breakdowns
@@ -595,11 +654,17 @@ def compute_stats(df_for_stats,
     ampl_bin_precision = 4
     
     if agg_method == 'mean':
-    #     mean_field_by_model = df_for_stats.groupby('model_name').mean()
-        agg_field_by_model = df_for_stats.groupby(groupby_vars).mean()
-    #     circmean_phase_by_model = df_for_stats[['phase_season', 'model_name']].groupby('model_name').apply(phase_circmean)
-        agg_phase_by_model = df_for_stats[_variables_of_interest].groupby(groupby_vars).agg(phase_circmean)
-    
+
+#         agg_field_by_model = df_for_stats.groupby(groupby_vars).mean()
+        agg_field_by_model = df_for_stats.groupby(groupby_vars).apply(df_mean_lat_weighted, field_name = 'ampl_season')
+        agg_field_by_model = pd.DataFrame(agg_field_by_model)
+        agg_field_by_model = agg_field_by_model.rename({0:'ampl_season'}, axis = 1)
+        
+        agg_phase_by_model = df_for_stats[_variables_of_interest].groupby(groupby_vars).apply(lat_weighted_circ_mean, field_name = 'phase_season')
+        agg_phase_by_model = pd.DataFrame(agg_phase_by_model)
+        agg_phase_by_model = agg_phase_by_model.rename({0:'phase_season'}, axis = 1)
+        
+        
     elif agg_method == 'mode':
 #         print('here')
         agg_field_by_model = df_for_stats[_variables_of_interest].round(ampl_bin_precision).groupby(groupby_vars).agg(mode_apply)
@@ -781,16 +846,36 @@ def plot_corr_matrix(corr_mat_ds,
                 mask = upper_tr_mask)
     plt.tight_layout()
     
+
     
+def summary_stats_for_df(df, 
+                         agg_method = 'mode',
+                         phase_bin_precision = 1,
+                         ampl_bin_precision = 4):
+    '''Given a pd.DataFrame, compute summary stats for 
+    amplitude and phase (mean or mode). '''
+    if agg_method == 'mode': 
+        ampl_agg = mode_apply(df['ampl_season'].round(ampl_bin_precision))
+        phase_agg = mode_apply(df['phase_season'].round(phase_bin_precision))
+    if agg_method == 'mean':
+        ampl_agg = df_mean_lat_weighted(df, 'ampl_season')
+        phase_agg = lat_weighted_circ_mean(df, 'phase_season')
+        
+    return (ampl_agg, phase_agg)
+
+
 
 def make_phase_plot(water_df,
                     land_df,
                     obs_water_df,
                     obs_land_df, 
+                    agg_method = 'mean',
+                    title = r'Diurnal Phase [hr] & Amplitude [$\frac{mm}{day}$] for CMIP6 and IMERG',
+                    y_lim = (0, 1),
                     figsize = (13,8),
                     markersize = 2,
                     textsize = 8,
-                    normalize_ampl = True,
+                    normalize_ampl = False,
                     ampl_unit_conversion_factor = 1.0):
     
     fig = plt.figure(figsize = figsize)
@@ -798,15 +883,25 @@ def make_phase_plot(water_df,
     
     taylor_diag = PhaseDiagram(fig = fig, 
                               label = 'IMERG', 
-                              y_lim=(0, 4),
+                              y_lim=y_lim,
                               radial_label_pos = 0
                               )
     taylor_diag.add_grid()
     
     # calculate obs phase mode
-    ampl_observed_water = mode_apply(obs_water_df['ampl_season'].round(4)* ampl_unit_conversion_factor)
-    ampl_observed_land = mode_apply(obs_land_df['ampl_season'].round(4)* ampl_unit_conversion_factor)
     
+    ampl_observed_water, phase_observed_water = summary_stats_for_df(obs_water_df, 
+                                                                     agg_method = agg_method)
+    
+    ampl_observed_land, phase_observed_land = summary_stats_for_df(obs_land_df, 
+                                                                   agg_method = agg_method)
+    
+    
+#     ampl_observed_water = mode_apply(obs_water_df['ampl_season'].round(4))
+#     ampl_observed_land = mode_apply(obs_land_df['ampl_season'].round(4))
+    
+#     phase_observed_water = mode_apply(obs_water_df['phase_season'].round(1)
+#     phase_observed_land = mode_apply(obs_water_df['phase_season'].round(1))
 
     if normalize_ampl:
         ampl_to_plot_water = 1.0
@@ -814,15 +909,16 @@ def make_phase_plot(water_df,
     else:
         ampl_to_plot_water = ampl_observed_water
         ampl_to_plot_land = ampl_observed_land
-
-    taylor_diag.add_sample(phase = mode_apply(obs_water_df['phase_season'].round(1)), 
+    
+    print(ampl_to_plot_water)
+    taylor_diag.add_sample(phase = phase_observed_water, 
                                ampl = ampl_to_plot_water, 
                                marker = '*', 
                                c = 'b',
                                label = 'IMERG-Water', 
                                markersize = 13)
 
-    taylor_diag.add_sample(phase = mode_apply(obs_water_df['phase_season'].round(1)), 
+    taylor_diag.add_sample(phase = phase_observed_land, 
                                ampl = ampl_to_plot_land, 
                                marker = '*', 
                                c = 'g',
@@ -835,7 +931,7 @@ def make_phase_plot(water_df,
     for model_name_i in range(len(model_list)):
 
         phase_i = water_df.loc[model_list[model_name_i],:]['phase_mean']
-        ampl_i = water_df.loc[model_list[model_name_i],:]['ampl_mean'] * ampl_unit_conversion_factor
+        ampl_i = water_df.loc[model_list[model_name_i],:]['ampl_mean']
 
         if normalize_ampl:
             ampl_i = ampl_i/ampl_observed_water
@@ -857,7 +953,7 @@ def make_phase_plot(water_df,
     ## Plot model phase/ampl over land
     for model_name_i in range(len(model_list)):
         phase_i = land_df.loc[model_list[model_name_i],:]['phase_mean']
-        ampl_i = land_df.loc[model_list[model_name_i],:]['ampl_mean'] * ampl_unit_conversion_factor
+        ampl_i = land_df.loc[model_list[model_name_i],:]['ampl_mean']
 
         if normalize_ampl:
             ampl_i = ampl_i/ampl_observed_land
@@ -877,12 +973,15 @@ def make_phase_plot(water_df,
                              size = textsize,
                              weight = 'bold')
 
-
+    ax = plt.gca()
+    ax.text(-.1, ax.get_rmax()/2.,r'Amplitude [$\frac{mm}{day}$]',
+        rotation=90, ha='center',va='center')
+    plt.xlabel('Local Solar Time [Hours]', weight = 'bold')
 
     leg = plt.legend(loc = 'center left', bbox_to_anchor=(1.1,0.5), prop={'size': 11}, handlelength = 0, markerscale = 0.8)
 
 
-    plt.title(r'Diurnal Phase [hr] & Amplitude [$\frac{mm}{yr}$] for CMIP5 and IMERG', weight = 'bold')
+    plt.title(title, weight = 'bold')
     
 
 
