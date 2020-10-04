@@ -173,6 +173,29 @@ def _open_and_preprocess_gpm(input_data_dir_gpm,
     return df_gpm
 
 
+def _load_all_means(cmip_rel_dir,
+                    filename = 'grid1_1985-01_2006-01_mean.nc'):
+    '''Given path to mean precip fields, where models are subdirs, load and return a dataframe'''
+    model_names = os.listdir(cmip_rel_dir)
+    mean_dfs = []
+    for model_name in model_names: 
+        ds_i = xr.open_dataset(cmip_rel_dir + model_name + '/' + filename)
+        ds_i_df = ds_i.to_dataframe()
+        if 'bnds' in ds_i_df.index.names:
+            ds_i_df = ds_i_df.reset_index('bnds').drop(['lat_bnds', 'lon_bnds', 'bnds'], axis = 1)
+
+
+        ds_i_df['model_name'] = model_name
+        ds_i_df = ds_i_df.rename({'pr':'pr_mean'}, axis = 1)
+#         ds_i_df = ds_i_df.reset_index()
+#         ds_i_df = ds_i_df.reset_index().set_index(['model_name','lat','lon'])
+        mean_dfs.append(ds_i_df)
+    
+    return pd.concat(mean_dfs, axis = 0)
+
+    
+    
+
 ### filtering functions for pd.DataFrames 
 def filter_by_lat(df, min_lat, max_lat, absolute_value = False):
     '''Filter pd.DataFrame by lat. 
