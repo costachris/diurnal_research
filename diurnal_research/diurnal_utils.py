@@ -306,12 +306,14 @@ def diurnal_analysis(ds,
                                    lat_mesh = lat_mesh,
                                    field_id = field_id)
         lst_array = lst_da.values
+        lst_array = lst_array.astype(np.float32)
         del lst_da
         lst_array[lst_array == 0] = 24
+        
         field_season_array = season_ds[field_id].values
-
+        field_season_array =  field_season_array.astype(np.float32)
 #         field_season_mean = field_season_array.mean(axis = 0)
-
+        print('float32')
         # compute mu_ij
 #         mu_ij = np.zeros(field_season_array.shape[-2:])
         mu_ij = np.zeros(field_season_array.shape[-2:])
