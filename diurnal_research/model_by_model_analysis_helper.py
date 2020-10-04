@@ -67,9 +67,27 @@ def phase_circmean_internal(samples, high=24.0, low=0.0):
     
     return res*(high - low)/2.0/np.pi + low
     
-def lat_weighted_circ_mean(df, field_name, high=24.0, low=0.0):
-    '''Given dataframe with circular quantity, find lat weighted mean. '''
-    samples = np.asarray(df[field_name])
+
+
+def lat_weighted_circ_mean(df, 
+                           field_name, 
+#                            weight_field_2 = 'pr_mean', 
+                           weight_field_2 = None, 
+                           high=24.0, 
+                           low=0.0):
+    '''Given dataframe with circular quantity, find lat weighted mean.
+    weight_field_2.
+    
+    Args
+    -----------
+    
+    weight_field_2 - str
+        Field name of additional field to weight mean by.
+    
+    Returns
+        Weighted mean of field 
+    '''
+    samples = np.asarray(df[field_name].values)
     
     sin_samp = np.sin((samples - low)*2.*np.pi / (high - low))
     cos_samp = np.cos((samples - low)*2.*np.pi / (high - low))
@@ -79,7 +97,10 @@ def lat_weighted_circ_mean(df, field_name, high=24.0, low=0.0):
     
     weights = np.cos(np.deg2rad(df['lat']))
     
-    
+    if weight_field_2:
+        print('double-weighted')
+        weights = np.multiply(df[weight_field_2].values, weights)
+        
 #     sin_ave = np.average(sin_samp, weights = weights)
 #     cos_ave = np.average(cos_samp, weights = weights)
 #     res = np.arctan2(sin_ave, cos_ave)
@@ -668,7 +689,7 @@ def compute_stats(df_for_stats,
         
     # subset columns before doing pandas aggs to speed up calculations
     
-    _variables_of_interest = ['ampl_season', 'phase_season', 'model_name']
+    _variables_of_interest = ['ampl_season', 'phase_season', 'model_name', 'pr_mean']
     
     if 'season' in df_for_stats.columns:
         _variables_of_interest.append('season')
@@ -876,11 +897,26 @@ def summary_stats_for_df(df,
                          phase_bin_precision = 1,
                          ampl_bin_precision = 4):
     '''Given a pd.DataFrame, compute summary stats for 
-    amplitude and phase (mean or mode). '''
+    amplitude and phase (`mean`, `mode`, `precip_mean`).
+    
+    Args
+    ------
+    agg_method - str
+        {`mean`, `mode`, `precip_mean`}
+        mode : mode
+        mean : cos(lat) weighted mean
+        precip_mean :  cos(lat) + precip weighted mean
+    
+    
+    '''
     if agg_method == 'mode': 
         ampl_agg = mode_apply(df['ampl_season'].round(ampl_bin_precision))
         phase_agg = mode_apply(df['phase_season'].round(phase_bin_precision))
     if agg_method == 'mean':
+        ampl_agg = df_mean_lat_weighted(df, 'ampl_season')
+        phase_agg = lat_weighted_circ_mean(df, 'phase_season')
+        
+    if agg_method == 'precip_mean':
         ampl_agg = df_mean_lat_weighted(df, 'ampl_season')
         phase_agg = lat_weighted_circ_mean(df, 'phase_season')
         

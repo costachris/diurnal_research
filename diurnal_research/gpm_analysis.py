@@ -25,30 +25,41 @@ from diurnal_utils import *
 # %run diurnal_utils.py
 
 
-# In[13]:
+# In[2]:
 
 
-out_folder_identifier = 'bin_pt2_hr_15_yr_round' #label to append to output path
+out_folder_identifier = 'bin_pt2_hr_15_yr_round_final' #label to append to output path
 
 start_date = '2000-06'
 # end_date = '2000-07'
 end_date =  '2016-06'
 
 
-# In[14]:
+# In[3]:
 
 
-save_output_dir = '/export/data1/cchristo/diurnal_analysis_results/GPM_' + out_folder_identifier + '/'
-save_figs_dir = '/home/cchristo/proj_tapio/figs/diurnal_cycle_figs/gpm_2000_2010_precip/'
+# for sampo
+# save_output_dir = '/export/data1/cchristo/diurnal_analysis_results/GPM_' + out_folder_identifier + '/'
+
+# for tofu
+save_output_dir = '/net/fluo/data2/groupMembers/cchristo/gpm_results/' + out_folder_identifier + '/'
+
+# save_figs_dir = '/home/cchristo/proj_tapio/figs/diurnal_cycle_figs/gpm_2000_2010_precip/'
 
 
-# In[17]:
+# In[4]:
 
 
-# model_dir = '/export/data1/cchristo/gpm_data/gpmdata/'
-model_dir = '/export/data1/cchristo/gpm_data/gpmdata_regridded_gfdl_cm4/'
 
-years_to_include = range(2000, 2012)
+# for sampo
+# # model_dir = '/export/data1/cchristo/gpm_data/gpmdata/'
+# model_dir = '/export/data1/cchristo/gpm_data/gpmdata_regridded_gfdl_cm4/'
+# # model_dir = '/export/data1/cchristo/gpm_data/gpmdata_regridded_grid1/'
+
+# for tofu
+model_dir = '/net/fluo/data2/groupMembers/cchristo/gpm/'
+
+years_to_include = range(2000, 2017)
 years_to_include = [str(year_ii) for year_ii in years_to_include]
 
 result = [y for x in os.walk(model_dir) for y in glob(os.path.join(x[0], '*.nc'))]
@@ -65,10 +76,10 @@ for path_i in result:
 result = sorted(result_filt)
 
 
-# In[19]:
+# In[6]:
 
 
-# result
+# print(result[-1])
 
 
 # In[20]:
