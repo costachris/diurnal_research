@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[11]:
+# In[16]:
 
 
 import os
@@ -12,20 +12,22 @@ import matplotlib.pyplot as plt
 import xesmf as xe
 import time
 import gc
+import grid_definitions
 
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 
-# In[12]:
+# In[18]:
 
 
 regrid_weights_dir = '/export/data1/cchristo/regridding_weights/'
 regridded_output_dir = '/export/data1/cchristo/gpm_data/gpmdata_regridded_gfdl_cm4/'
+# regridded_output_dir = '/export/data1/cchristo/gpm_data/gpmdata_regridded_grid1/'
 
 
-# In[13]:
+# In[19]:
 
 
 path_to_cmip_dirs = '/export/data1/cchristo/cmip6_clouds/download_from_source/'
@@ -35,20 +37,28 @@ file_list = os.listdir(path_to_cmip_files)
 ds_model_grid = xr.open_dataset(path_to_cmip_files + file_list[-1])
 
 
-# In[14]:
+# In[21]:
 
 
 grid_out = xr.Dataset({'lat': ds_model_grid['lat'].values,
                        'lon': ds_model_grid['lon'].values})
 
 
-# In[ ]:
+# In[27]:
 
 
+# np.diff(grid_out.lon)
 
 
+# In[53]:
 
-# In[15]:
+
+# # grid_out.lon
+# out_grid_name = 'grid1'
+# grid_out = grid_definitions.grids[out_grid_name]
+
+
+# In[28]:
 
 
 model_dir = '/export/data1/cchristo/gpm_data/gpmdata/'
@@ -60,20 +70,20 @@ ds_satellite_grid = xr.open_dataset(result[10])
 
 
 
-# In[16]:
+# In[29]:
 
 
 grid_in = xr.Dataset({'lat': ds_satellite_grid['lat'].values,
                        'lon': ds_satellite_grid['lon'].values})
 
 
-# In[17]:
+# In[ ]:
 
 
-ds_satellite_grid
+# Create regridder
 
 
-# In[18]:
+# In[31]:
 
 
 regridder = xe.Regridder(grid_in, grid_out, 
@@ -81,8 +91,13 @@ regridder = xe.Regridder(grid_in, grid_out,
                          reuse_weights = True, 
                          filename = regrid_weights_dir + 'gpm_to_gfdl_cm4.nc')
 
+# regridder = xe.Regridder(grid_in, grid_out, 
+#                          method = 'bilinear', 
+#                          reuse_weights = True, 
+#                          filename = regrid_weights_dir + 'gpm_to_grid1.nc')
 
-# In[19]:
+
+# In[32]:
 
 
 dr_out = regridder(ds_satellite_grid.transpose('time','lat','lon'))
@@ -115,7 +130,7 @@ dr_out = regridder(ds_satellite_grid.transpose('time','lat','lon'))
 # In[96]:
 
 
-dr_out['precipitationCal'].mean()
+# dr_out['precipitationCal'].mean()
 
 
 # In[ ]:
@@ -124,13 +139,18 @@ dr_out['precipitationCal'].mean()
 
 
 
-# In[75]:
+# In[ ]:
 
 
 regridder = xe.Regridder(grid_in, grid_out, 
                      method = 'bilinear', 
                      reuse_weights = True, 
                      filename = regrid_weights_dir + 'gpm_to_gfdl_cm4.nc')
+
+# regridder = xe.Regridder(grid_in, grid_out, 
+#                      method = 'bilinear', 
+#                      reuse_weights = True, 
+#                      filename = regrid_weights_dir + 'gpm_to_grid1.nc')
 
 for result_i in result:
     try:

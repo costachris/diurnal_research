@@ -461,6 +461,7 @@ def make_single_plot(data,
                 axis = None,
                 cmap = plt.get_cmap('twilight'),
                 vmin = None,
+                figsize = (12,4),
                 vmax = None,
                 save_fig_path = None):
     ''' Make single geographic plot. '''
@@ -471,7 +472,7 @@ def make_single_plot(data,
         data = data.values
     
     if (fig is None) & (ax is None):
-        fig = plt.figure(figsize = (10,3))
+        fig = plt.figure(figsize = figsize)
         ax = plt.gca()
 #     fig = plt.figure(figsize = (10,3))
     
