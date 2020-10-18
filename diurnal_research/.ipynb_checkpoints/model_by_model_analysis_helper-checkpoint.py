@@ -835,7 +835,7 @@ def land_sea_histogram(df,
     if new_fig & (not ax is None):
         plt.figure()
     
-    field_id_to_xlabel = {'phase_season': 'Phase [hours]',
+    field_id_to_xlabel = {'phase_season': 'Precipitation Phase [hours]',
                           'ampl_season': 'Amplitude'}
     if 'cmip_identifier' in df.columns:
         df_water = df[(df['land_sea_mask'] == 0) & (df['cmip_identifier'] == cmip_identifier)][field_id]

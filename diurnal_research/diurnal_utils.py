@@ -456,6 +456,7 @@ def make_single_plot(data,
                 ax = None,
                 fig = None,
                 title = r'$\Phi$',
+                title_fontsize = 13,
                 ylabel = None,
                 xticks_bool = True,
                 axis = None,
@@ -502,7 +503,9 @@ def make_single_plot(data,
 #     plt.xlabel('Longitude')
     plt.xticks(rotation = 45)
     if title:
-        ax.set_title(title, weight = 'bold')
+        ax.set_title(title, 
+                     weight = 'bold',
+                     fontsize = title_fontsize)
     if not (ylabel is None):
         ax.set_ylabel(ylabel, weight = 'bold')
     if axis: 
