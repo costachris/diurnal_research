@@ -27,7 +27,8 @@ from fetch_model_helper import *
 # In[15]:
 
 
-out_folder_identifier = 'bin_pt2_hr_round_gpm_overlap' #label to append to output path
+# out_folder_identifier = 'bin_pt2_hr_round_gpm_overlap' #label to append to output path
+out_folder_identifier = 'bin_pt2_hr_round_closest_gpm_overlap'
 skip_if_folder_exists =  True # used for processing models in parallel
 
 
@@ -37,12 +38,26 @@ skip_if_folder_exists =  True # used for processing models in parallel
 # end_date = '2006-01'
 
 
-cmip_identifier = 'CMIP6'
-start_date = '2000-01'
-end_date = '2015-01'
+# cmip_identifier = 'CMIP6'
+# start_date = '2000-01'
+# end_date = '2015-01'
+
+# cmip_identifier = 'CMIP6'
+# start_date = '1985-01'
+# end_date = '2015-01'
 
 # cmip_identifier = 'CMIP5'
 # start_date = '1985-01'
+# end_date = '2006-01'
+
+
+cmip_identifier = 'CMIP5'
+start_date = '1991-01'
+end_date = '2006-01'
+
+
+# cmip_identifier = 'CMIP5'
+# start_date = '1976-01'
 # end_date = '2006-01'
 
 #TODO overwrite_existing_files = False
