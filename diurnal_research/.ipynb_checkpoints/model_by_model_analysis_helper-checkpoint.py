@@ -688,9 +688,11 @@ def compute_stats(df_for_stats,
         df_for_stats_true = df_for_stats_true.reset_index('season')
         
     # subset columns before doing pandas aggs to speed up calculations
-    
-    _variables_of_interest = ['ampl_season', 'phase_season', 'model_name', 'pr_mean']
-    
+    if 'pr_mean' in df_for_stats.columns:
+        _variables_of_interest = ['ampl_season', 'phase_season', 'model_name', 'pr_mean']
+    else: 
+        _variables_of_interest = ['ampl_season', 'phase_season', 'model_name']
+        
     if 'season' in df_for_stats.columns:
         _variables_of_interest.append('season')
     
