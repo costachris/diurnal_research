@@ -40,6 +40,7 @@ def get_unique_ensembles_cmip6(path_to_model_dirs):
     unique_model_names = get_unique_models(path_to_model_dirs)
     model_to_ensemble_dict = {}
     for model_ii in unique_model_names:
+#         print(model_ii)
         paths_for_model = get_path_to_desired_model_cmip6(path_to_model_dirs,
                                                           model_ii,
                                                           desired_ensemble_member = None)
@@ -104,13 +105,16 @@ def get_path_to_desired_model_cmip6(path_to_model_dirs,
     # if dir contains multiple esemble members, we only want to select the most desired (otherwise we'll get repeated files)
     all_desired_file_paths = []
     ensembles_in_desired_paths = [f_path.split('_')[-3] for f_path in desired_model_fnames_final]
-    for ensemble_member_ii in desired_ensemble_member:
-        if ensemble_member_ii in ensembles_in_desired_paths:
-            for i in range(len(ensembles_in_desired_paths)):
-                if ensembles_in_desired_paths[i] == ensemble_member_ii:
-                    all_desired_file_paths.append(desired_model_fnames_final[i])
-            break
-            
+    
+    if desired_ensemble_member:
+        for ensemble_member_ii in desired_ensemble_member:
+            if ensemble_member_ii in ensembles_in_desired_paths:
+                for i in range(len(ensembles_in_desired_paths)):
+                    if ensembles_in_desired_paths[i] == ensemble_member_ii:
+                        all_desired_file_paths.append(desired_model_fnames_final[i])
+                break
+    else:
+        all_desired_file_paths = desired_model_fnames_final
     return sorted(all_desired_file_paths)
 
 
