@@ -543,7 +543,7 @@ def full_analysis(df_for_stats,
                                                 min_lat, 
                                                 max_lat, 
                                                 absolute_value=absolute_value)
-#     return df_for_stats_water, None
+#     return df_for_stats_water, df_for_stats_land
     # apply other mask, if specified
     if not (var_mask_df is None):
         

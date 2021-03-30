@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from scipy.stats import circmean, circstd, mode
-
+import random as rd
 from mpl_toolkits.basemap import Basemap
 import taylorDiagram
 from phaseDiagram import *
@@ -543,7 +543,7 @@ def full_analysis(df_for_stats,
                                                 min_lat, 
                                                 max_lat, 
                                                 absolute_value=absolute_value)
-#     return df_for_stats_water, None
+#     return df_for_stats_water, df_for_stats_land
     # apply other mask, if specified
     if not (var_mask_df is None):
         
@@ -1045,6 +1045,52 @@ def make_phase_plot(water_df,
     plt.title(title, weight = 'bold')
     
 
+    
+def linear_regression(X, Y):
+    beta=np.linalg.solve(X.T.dot(X),X.T.dot(Y))
+    return beta
+def confidence_bounds(x,betas):
+    predictions=[x.dot(b) for b in betas]
+    predictions.sort()
+    CI_95=[predictions[24], predictions[-25]]
+    CI_68=[predictions[160], predictions[-160]]
+    CI_99=[predictions[1], predictions[-1]]
+    return CI_99,CI_95,CI_68
+def regression_bounds(x,y,XN):
+    X=x
+    Y=y
+    sorted_x = np.sort(X)
+    argind = np.argsort(X)
+    sorted_y = np.zeros((len(x),1))
+    for i in range(len(x)):
+        sorted_y[i] = Y[argind[i]]
+    X=np.expand_dims(sorted_x,1)
+    Y=sorted_y
+    X = np.hstack((X, np.ones((X.shape[0], 1), dtype=X.dtype)))
+    beta=linear_regression(X, Y)
+    betas=[]
+    N= X.shape[0]
+    for resample in range(1000):
+        index = [rd.choice(range(N)) for i in range(N)]
+        re_X=X[index,:]
+        betas.append(linear_regression(re_X, Y[index,:]))
+    upper99=np.zeros((len(x),1))
+    lower99=np.zeros((len(x),1))
+    upper95=np.zeros((len(x),1))
+    lower95=np.zeros((len(x),1))
+    upper68=np.zeros((len(x),1))
+    lower68=np.zeros((len(x),1))
+    cnt=0
+    for xn in XN:
+        CB_99,CB_95,CB_68 = confidence_bounds(xn,betas)
+        upper99[cnt]=(CB_99[1])
+        lower99[cnt]=(CB_99[0])
+        upper95[cnt]=(CB_95[1])
+        lower95[cnt]=(CB_95[0])
+        upper68[cnt]=(CB_68[1])
+        lower68[cnt]=(CB_68[0])
+        cnt=cnt+1
+    return upper99,lower99,upper95,lower95,upper68,lower68,beta
 
 
 #### Old code 

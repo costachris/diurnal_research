@@ -23,6 +23,10 @@ def cos_func(x, a, phi):
     b = ((2*np.pi)/24)
     return a * np.cos(b * (x - phi))
 
+def cos_func_2_mode(x, a1, phi1, a2, phi2):
+    b = ((2*np.pi)/24)
+    c = ((2*np.pi)/12)
+    return (a1 * np.cos(b * (x - phi1)) + a2 * np.cos(c * (x - phi2)))
 
 def cos_fit_grid(field_array, lst_array, hour_means, hour_bins):
     ''' Given ds, perform cos fit grid-by-grid and return array of fitted parameters.
