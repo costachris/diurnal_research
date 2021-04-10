@@ -172,8 +172,13 @@ def df_mean_lat_weighted(df, field_name):
 
 def _open_and_preprocess_gpm(input_data_dir_gpm,
                              ds_land_sea,
-                             yearly_mean_bool):
+                             yearly_mean_bool,
+                             mask_CI = None):
     ds_gpm = xr.open_dataset(input_data_dir_gpm +  'grid1_2000-06_2016-06_precip.nc')
+    
+    if mask_CI:
+        ds_gpm = ds_test.where((ds_test['ampl_season'] - 4*np.sqrt(ds_test['ampl_cov_season'])) > 0)
+        
 
     if yearly_mean_bool:
         ### compute means
@@ -832,12 +837,13 @@ def land_sea_histogram(df,
                        cmip_identifier = 'CMIP6', 
                        new_fig = True, 
                        ax = None,
-                       field_id = 'phase_season'):
+                       field_id = 'phase_season',
+                       subplot_label = None):
     '''Given a dataframe, plot histogram and corresponding pdf with land/ocean breakdown'''
     if new_fig & (not ax is None):
         plt.figure()
     
-    field_id_to_xlabel = {'phase_season': 'Precipitation Phase [hours]',
+    field_id_to_xlabel = {'phase_season': 'Precipitation Phase [hours, LST]',
                           'ampl_season': 'Amplitude'}
     if 'cmip_identifier' in df.columns:
         df_water = df[(df['land_sea_mask'] == 0) & (df['cmip_identifier'] == cmip_identifier)][field_id]
@@ -861,11 +867,23 @@ def land_sea_histogram(df,
         if xlabel:
             ax.set_xlabel(field_id_to_xlabel[field_id], fontweight = 'bold')
             
+        if subplot_label: 
+            ax.text(0.3, 0.205, subplot_label, fontweight = 'bold'
+)
+            
         ax.set_ylabel(ylabel, fontweight = 'bold')
         if title:
             ax.set_title(title, fontweight = 'bold')
+            
+        minor_ticks_x = np.arange(0, 24, 1)
+        minor_ticks_y = np.arange(0, 0.22, 0.5)
+        ax.set_xticks(minor_ticks_x)
+        for x_tick in ax.get_xticklabels():
+            x_tick.set_rotation(45)
         ax.grid()
         ax.legend()
+        
+        
         
     else: 
         if field_id == 'phase_season':

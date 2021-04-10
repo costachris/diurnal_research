@@ -28,7 +28,7 @@ from diurnal_utils import *
 # In[2]:
 
 
-out_folder_identifier = 'bin_pt2_hr_15_yr_round_final' #label to append to output path
+out_folder_identifier = 'bin_pt2_hr_15_yr_round_2_mode_final' #label to append to output path
 
 start_date = '2000-06'
 # end_date = '2000-07'
@@ -52,12 +52,12 @@ save_output_dir = '/net/fluo/data2/groupMembers/cchristo/gpm_results/' + out_fol
 
 
 # for sampo
-# # model_dir = '/export/data1/cchristo/gpm_data/gpmdata/'
+# model_dir = '/export/data1/cchristo/gpm_data/gpmdata/'
 # model_dir = '/export/data1/cchristo/gpm_data/gpmdata_regridded_gfdl_cm4/'
 # # model_dir = '/export/data1/cchristo/gpm_data/gpmdata_regridded_grid1/'
 
 # for tofu
-model_dir = '/net/fluo/data2/groupMembers/cchristo/gpm/'
+model_dir = '/net/fluo/data2/groupMembers/cchristo/gpm_grid1/'
 
 years_to_include = range(2000, 2017)
 years_to_include = [str(year_ii) for year_ii in years_to_include]
@@ -156,10 +156,11 @@ ds = ds.sel(lat= slice(-60, 60))
 
 
 
-out_ds, out_ds_means = diurnal_analysis(ds, 
+out_ds, out_ds_means = diurnal_analysis_2_mode_seasonal(ds, 
                                         field_id = 'precipitationCal', 
                                         grid_time_resolution_hours = 0.5,
-                                        time_resolution_hours = 0.2) #0.5)
+                                        time_resolution_hours = 0.2)
+#                                         time_resolution_hours = 0.2) #0.5)
 
 
 # In[24]:
