@@ -337,7 +337,8 @@ def compute_lst_array(ds,
     for time_ind in tqdm(range(len(ds[time_id]))):
         # note: for diurnal analysis we don't really care about year, month, day: just hour
         if (type(ds['time'][0].item()) == cftime._cftime.DatetimeNoLeap) | \
-            (type(ds['time'][0].item()) == cftime._cftime.Datetime360Day):
+            (type(ds['time'][0].item()) == cftime._cftime.Datetime360Day) | \
+            (type(ds['time'][0].item()) == cftime._cftime.DatetimeJulian):
 #             dt_i = datetime.strptime(str(ds.isel(time = time_ind)[time_id].values.item()), '%Y-%m-%d %H:%M:%S')
             dt_i = ds.isel(time = time_ind)[time_id].values.item()
             
@@ -364,6 +365,177 @@ def compute_lst_array(ds,
 
 
 #########
+def diurnal_analysis_2_mode_full_bootstrapped_int_days_precomputed(
+                     ds,
+                     lst_array_full, 
+                     field_season_array_full,
+                     grid_time_resolution_hours = 3, 
+                     time_resolution_hours = 1,
+                     round_precision = 2,
+                     **bootstrap_kwargs):
+    ''' Perform diurnal analysis using stationary bootstrapping (integer number of days) to get uncertainty on parameters. A lot of arrays are precomputed (LST, field_array) to speed up 
+    bootstrap calculations. 
+    
+    Assumes ordering (time, lat, lon), with those field/coordinate names.
+    Given dataset compute mean, standard deviation, amplitude, and phase. '''
+    hour_bins = np.arange(time_resolution_hours, 24 + time_resolution_hours, time_resolution_hours)
+    hour_bins = np.round(hour_bins, round_precision)
+    grid_hour_bins = np.arange(grid_time_resolution_hours, 24 + grid_time_resolution_hours, grid_time_resolution_hours)
+    grid_hour_bins = np.round(grid_hour_bins, round_precision)
+    lon_mesh, lat_mesh = np.meshgrid(ds['lon'].values, ds['lat'].values)
+
+    mu_season = {}
+    sigma_season = {}
+    ampl_season = {}
+    phase_season = {}
+    average_cycle_season = {}
+    
+    datasize = len(lst_array_full)
+    bootstrap_inds = stationary_bootstrap_int(datasize, **bootstrap_kwargs)
+    print('bootstrap_shape', bootstrap_inds.shape)
+    for bootstrap_number in range(bootstrap_inds.shape[0]):
+        
+        print(bootstrap_number)
+        # choose subset of dataset using bootstrap indicies
+        bootstrap_inds_i = bootstrap_inds[bootstrap_number]
+        field_season_array =  field_season_array_full[bootstrap_inds_i,:,:]
+        lst_array = lst_array_full[bootstrap_inds_i,:,:]
+        # compute hourly grid means needed for cos fit
+        f_bar_ks = {}
+        for ii in range(len(hour_bins)):
+            print(ii)
+            hour_i = hour_bins[ii]
+            masked_field = np.where(lst_array == hour_i, field_season_array, np.nan)
+
+            # mean for a given season, LST
+            f_bar_k = np.nanmean(masked_field, axis = 0)
+            f_bar_ks[hour_i] = f_bar_k
+
+        hour_means = np.stack(list(f_bar_ks.values()))
+
+        print('Performing Cos Fit')
+        res = cos_fit_2_mode_grid_average(hour_means, hour_bins)
+        print('Finished Cos Fit')
+        ampl_season[bootstrap_number], phase_season[bootstrap_number] = res[0], res[1]
+        
+    out_ds = xr.Dataset()
+#     out_ds['mu_season'] = make_da_from_dict(mu_season, ds, time_id = 'bootstrap_id')
+    out_ds['ampl_season'] = make_da_from_dict(ampl_season, ds, time_id = 'bootstrap_id')
+    out_ds['phase_season'] = make_da_from_dict(phase_season,ds, time_id = 'bootstrap_id')
+
+#     out_ds_means = xr.Dataset()
+#     out_ds_means = make_da_from_dict_time(average_cycle_season, ds, grid_hour_bins)
+#     out_ds_means = out_ds_means.to_dataset(name = field_id + '_mean')
+#     return (out_ds, out_ds_means)
+    return out_ds
+
+def diurnal_analysis_2_mode_full_bootstrapped_int_days(ds, 
+                     field_id, 
+                     grid_time_resolution_hours = 3, 
+                     time_resolution_hours = 1,
+                     round_precision = 2,
+                     **bootstrap_kwargs):
+    ''' Perform diurnal analysis using stationary bootstrapping (integer number of days) to get uncertainty on parameters. 
+    Assumes ordering (time, lat, lon), with those field/coordinate names.
+    Given dataset compute mean, standard deviation, amplitude, and phase. '''
+    hour_bins = np.arange(time_resolution_hours, 24 + time_resolution_hours, time_resolution_hours)
+    hour_bins = np.round(hour_bins, round_precision)
+    grid_hour_bins = np.arange(grid_time_resolution_hours, 24 + grid_time_resolution_hours, grid_time_resolution_hours)
+    grid_hour_bins = np.round(grid_hour_bins, round_precision)
+    lon_mesh, lat_mesh = np.meshgrid(ds['lon'].values, ds['lat'].values)
+
+    mu_season = {}
+    sigma_season = {}
+    ampl_season = {}
+    phase_season = {}
+    average_cycle_season = {}
+    
+    datasize = len(ds['time'])
+    bootstrap_inds = stationary_bootstrap_int(datasize, **bootstrap_kwargs)
+    print('bootstrap_shape', bootstrap_inds.shape)
+    for bootstrap_number in range(bootstrap_inds.shape[0]):
+        
+        print(bootstrap_number)
+        # choose subset of dataset using bootstrap indicies
+        ds_sub = ds.isel(time = bootstrap_inds[bootstrap_number])
+#         lst_da = compute_lst_array(ds_sub, 
+#                                    bin_interval = grid_time_resolution_hours, # time_resolution_hours,
+#                                    bin_bool = True, 
+#                                    round_precision = round_precision,
+#                                    lon_mesh = lon_mesh, 
+#                                    lat_mesh = lat_mesh,
+#                                    field_id = field_id)
+#         lst_array = lst_da.values
+#         lst_array = lst_array.astype(np.float32)
+#         del lst_da
+#         lst_array[lst_array == 0] = 24
+
+        field_season_array = ds_sub[field_id].values
+        field_season_array =  field_season_array.astype(np.float32)
+
+
+#         mu_ij = np.zeros(field_season_array.shape[-2:])
+
+#         f_bar_ks = {}
+#         for hour_i in grid_hour_bins:
+#             masked_field = np.where(lst_array == hour_i, field_season_array, np.nan)
+
+#             # mean for a given season, LST
+#             f_bar_k = np.nanmean(masked_field, axis = 0)
+#             f_bar_k[np.isnan(f_bar_k)] = 0
+#             f_bar_ks[hour_i] = f_bar_k
+#             mu_ij  += f_bar_k
+
+#         hour_means = np.stack(list(f_bar_ks.values()))
+#         average_cycle_season[bootstrap_number] = hour_means
+
+
+#         mu_ij = (1/len(grid_hour_bins))*mu_ij
+#         mu_season[bootstrap_number] = mu_ij
+
+
+        lst_da = compute_lst_array(ds_sub, 
+                                   bin_interval = time_resolution_hours,
+                                   bin_bool = True, 
+                                   round_precision = round_precision,
+                                   lon_mesh = lon_mesh, 
+                                   lat_mesh = lat_mesh,
+                                   field_id = field_id)
+        lst_array = lst_da.values
+        lst_array = lst_array.astype(np.float32)
+        del lst_da
+        lst_array[lst_array == 0] = 24
+        field_season_array = ds_sub[field_id].values
+        field_season_array = field_season_array.astype(np.float32)
+        
+        # compute hourly grid means needed for cos fit
+        f_bar_ks = {}
+        for ii in range(len(hour_bins)):
+            hour_i = hour_bins[ii]
+            masked_field = np.where(lst_array == hour_i, field_season_array, np.nan)
+
+            # mean for a given season, LST
+            f_bar_k = np.nanmean(masked_field, axis = 0)
+            f_bar_ks[hour_i] = f_bar_k
+
+        hour_means = np.stack(list(f_bar_ks.values()))
+
+        print('Performing Cos Fit')
+        res = cos_fit_2_mode_grid_average(hour_means, hour_bins)
+        print('Finished Cos Fit')
+        ampl_season[bootstrap_number], phase_season[bootstrap_number] = res[0], res[1]
+        
+    out_ds = xr.Dataset()
+#     out_ds['mu_season'] = make_da_from_dict(mu_season, ds, time_id = 'bootstrap_id')
+    out_ds['ampl_season'] = make_da_from_dict(ampl_season, ds, time_id = 'bootstrap_id')
+    out_ds['phase_season'] = make_da_from_dict(phase_season,ds, time_id = 'bootstrap_id')
+
+#     out_ds_means = xr.Dataset()
+#     out_ds_means = make_da_from_dict_time(average_cycle_season, ds, grid_hour_bins)
+#     out_ds_means = out_ds_means.to_dataset(name = field_id + '_mean')
+#     return (out_ds, out_ds_means)
+    return out_ds
+
 
 
 def diurnal_analysis_2_mode_full_bootstrapped(ds, 
@@ -920,10 +1092,13 @@ def make_single_plot(data,
                 title = r'$\Phi$',
                 title_fontsize = 13,
                 ylabel = None,
+                subplot_label = None,
                 xticks_bool = True,
                 axis = None,
                 cmap = plt.get_cmap('twilight'),
                 cbar = None,
+                cbar_frac = 0.01,
+                cbar_ylabel = None,
                 vmin = None,
                 figsize = (12,4),
                 vmax = None,
@@ -971,13 +1146,28 @@ def make_single_plot(data,
                      fontsize = title_fontsize)
     if not (ylabel is None):
         ax.set_ylabel(ylabel, weight = 'bold')
+    if subplot_label: 
+            ax.text(-8, 53, subplot_label, fontweight = 'bold')
     if axis: 
         set_axis(ax)
         
     if cbar:
-        fig.colorbar(cbar, ax=ax, fraction = 0.01, pad = 0.09)
-    else:
-        fig.colorbar(im, ax=ax, fraction = 0.01, pad = 0.09)
+        if type(cbar) == bool:
+            cbar_obj = fig.colorbar(im, 
+                     ax=ax, 
+                     fraction = cbar_frac, 
+                     pad = 0.088)    #pad = 0.09
+        else:
+            cbar_obj = fig.colorbar(cbar, 
+                         ax=ax, 
+                         fraction = cbar_frac, 
+                         pad = 0.088)    #pad = 0.09
+        cbar_obj.ax.set_xlabel(cbar_ylabel, fontweight = 'bold')
+        
+#     if cbar:
+#         fig.colorbar(cbar, ax=ax, fraction = 0.01, pad = 0.09)
+#     else:
+#         fig.colorbar(im, ax=ax, fraction = 0.01, pad = 0.09)
         
     plt.tight_layout()
 
@@ -1011,6 +1201,40 @@ def make_da_from_dict_time(time_dict, ds, hour_bins, time_id = 'time', lat_id = 
                         lon_id: ds[lon_id].values, 
                         lat_id: ds[lat_id].values})
 
+
+
+def stationary_bootstrap_int(datasize, samplesize, blocksize, samples_int = 48, nboot = 200):
+    
+    """
+    Create stationary bootstrap with integer number of days. 
+    bootstrap_indices = stationary_bootstrap(datasize, samplesize, blocksize, nboot)
+    samples_int - samples corresponding to int. (ie if 24 samples in 1 day, samples_int = 24)
+    As in Poltis and Romano 1984: Returns `nboot` x `samplesize` array of indices from 
+    0 to `datasize` using blocks of size given by geometric distribution of size `blocksize`.
+    """
+    bootstrap_indices = np.zeros((nboot, samplesize), dtype=int)
+    for i in range(nboot):
+        # size of sample follows geometric distribution with mean nsamples_mean
+        blocksizes = np.random.geometric(1/blocksize, size=datasize) 
+        blocksizes[blocksizes < samples_int] = samples_int
+        blocksizes = np.round(blocksizes/samples_int).astype(int)
+        blocksizes = (blocksizes * samples_int).astype(int)
+#         return blocksizes
+        # random starting indices of each block
+        indices = np.random.randint(datasize, size=datasize)
+        # construct pseudodata
+        j = 0
+        k = 0
+        while j < samplesize:
+            I = indices[k]
+            L = blocksizes[k]
+            for n in range(L):
+                if j + n == samplesize:
+                    break
+                bootstrap_indices[i, j + n] = (I + n) % datasize
+            j += L
+            k += 1
+    return bootstrap_indices
 
 
 def stationary_bootstrap(datasize, samplesize, blocksize, nboot = 200):

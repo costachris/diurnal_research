@@ -172,9 +172,11 @@ def df_mean_lat_weighted(df, field_name):
 
 def _open_and_preprocess_gpm(input_data_dir_gpm,
                              ds_land_sea,
-                             yearly_mean_bool):
-    ds_gpm = xr.open_dataset(input_data_dir_gpm +  'grid1_2000-06_2016-06_precip.nc')
-
+                             yearly_mean_bool,
+                             fname = 'grid1_2000-06_2016-06_precip.nc'):
+    ds_gpm = xr.open_dataset(input_data_dir_gpm +  fname)
+    
+        
     if yearly_mean_bool:
         ### compute means
         # # take mean across seasons using circular mean for phase
@@ -333,7 +335,7 @@ def _get_mean_field(data_dir,
         Pandas dataframe containing lat/lon as multiindex keys and 
         mask as column (0 for water, 1 for land). df should only
         contain one column. 
-    var_mask_df - pd.DataFrame or 'auto'
+    var_mask_df - pd.DataFrame, dict, or 'auto'
         only compute averages where mask is 1. Either provide mask 
         dataframe or 'auto'. Setting 'auto' will use
         `_create_mask_from_model` to automatically generate a seperate
@@ -544,6 +546,7 @@ def full_analysis(df_for_stats,
                                                 max_lat, 
                                                 absolute_value=absolute_value)
 #     return df_for_stats_water, df_for_stats_land
+#     return df_for_stats_water, df_for_stats_true_water
     # apply other mask, if specified
     if not (var_mask_df is None):
         
@@ -552,28 +555,50 @@ def full_analysis(df_for_stats,
         # merge seperate mask for each model
         if 'model_name' in var_mask_df:
             df_for_stats_water = _merge_df_on_model_name(df_for_stats_water, var_mask_df)
+            df_for_stats_land = _merge_df_on_model_name(df_for_stats_land, var_mask_df)
+#             return df_for_stats_water, None
         # TODO: if different mask for each model, which to use for satellite?
 #             df_for_stats_true_water = _merge_df_on_model_name(df_for_stats_true_water, var_mask_df)
         
         # merge single mask for all models
         else:
+            # mask observations + model data over water
             df_for_stats_water = pd.merge(df_for_stats_water, var_mask_df,
                                  how = 'left',
                                  left_index = True, 
                                  right_index = True)
-
-#             df_for_stats_true_water = pd.merge(df_for_stats_true_water, var_mask_df,
-#                                  how = 'left',
-#                                  left_index = True, 
-#                                  right_index = True)
-
+        
+            df_for_stats_true_water = pd.merge(df_for_stats_true_water, var_mask_df,
+                                 how = 'left',
+                                 left_index = True, 
+                                 right_index = True)
+            
+            df_for_stats_land = pd.merge(df_for_stats_land, var_mask_df,
+                             how = 'left',
+                             left_index = True, 
+                             right_index = True)
+            
+            df_for_stats_true_land = pd.merge(df_for_stats_true_land, var_mask_df,
+                                 how = 'left',
+                                 left_index = True, 
+                                 right_index = True)
+            
+         # mask model + observations
         df_for_stats_water = \
             df_for_stats_water[df_for_stats_water[var_mask_id] == 1]
         
-#         df_for_stats_true_water = \
-#             df_for_stats_true_water[df_for_stats_true_water[var_mask_id] == 1]
+         
+        df_for_stats_land = \
+            df_for_stats_land[df_for_stats_land[var_mask_id] == 1]
+        
+        if error_stats:
+            df_for_stats_true_water = \
+                df_for_stats_true_water[df_for_stats_true_water[var_mask_id] == 1]
+            
+            df_for_stats_true_land = \
+                df_for_stats_true_land[df_for_stats_true_land[var_mask_id] == 1]
+        
 
-#     return df_for_stats_water, None
     
 
     model_error_stats_df_land = compute_stats(df_for_stats_land,
@@ -832,12 +857,13 @@ def land_sea_histogram(df,
                        cmip_identifier = 'CMIP6', 
                        new_fig = True, 
                        ax = None,
-                       field_id = 'phase_season'):
+                       field_id = 'phase_season',
+                       subplot_label = None):
     '''Given a dataframe, plot histogram and corresponding pdf with land/ocean breakdown'''
     if new_fig & (not ax is None):
         plt.figure()
     
-    field_id_to_xlabel = {'phase_season': 'Precipitation Phase [hours]',
+    field_id_to_xlabel = {'phase_season': 'Precipitation Phase [hours, LST]',
                           'ampl_season': 'Amplitude'}
     if 'cmip_identifier' in df.columns:
         df_water = df[(df['land_sea_mask'] == 0) & (df['cmip_identifier'] == cmip_identifier)][field_id]
@@ -857,15 +883,27 @@ def land_sea_histogram(df,
     if not (ax is None):
         if field_id == 'phase_season':
             ax.set_xlim([0, 24])
-            ax.set_ylim([0, 0.22])
+            ax.set_ylim([0, 0.249])
         if xlabel:
             ax.set_xlabel(field_id_to_xlabel[field_id], fontweight = 'bold')
+            
+        if subplot_label: 
+            ax.text(0.3, 0.22, subplot_label, fontweight = 'bold'
+)
             
         ax.set_ylabel(ylabel, fontweight = 'bold')
         if title:
             ax.set_title(title, fontweight = 'bold')
+            
+        minor_ticks_x = np.arange(0, 24, 1)
+        minor_ticks_y = np.arange(0, 0.22, 0.5)
+        ax.set_xticks(minor_ticks_x)
+        for x_tick in ax.get_xticklabels():
+            x_tick.set_rotation(45)
         ax.grid()
-        ax.legend()
+        ax.legend(loc = 'upper right')
+        
+        
         
     else: 
         if field_id == 'phase_season':
@@ -897,20 +935,30 @@ def plot_corr_matrix(corr_mat_ds,
 def summary_stats_for_df(df, 
                          agg_method = 'mode',
                          phase_bin_precision = 1,
-                         ampl_bin_precision = 4):
+                         ampl_bin_precision = 4, 
+                         var_mask_id = None):
     '''Given a pd.DataFrame, compute summary stats for 
     amplitude and phase (`mean`, `mode`, `precip_mean`).
     
     Args
     ------
+    df - pd.DataFrame
+        A dataframe with the data
     agg_method - str
         {`mean`, `mode`, `precip_mean`}
         mode : mode
         mean : cos(lat) weighted mean
         precip_mean :  cos(lat) + precip weighted mean
     
+    var_mask_id : `str` or None
+        If id provided, mask data using bools in column `mask_id` before computing stats.
+    
     
     '''
+    if var_mask_id:
+        df = df[df[var_mask_id] == 1]
+    
+    
     if agg_method == 'mode': 
         ampl_agg = mode_apply(df['ampl_season'].round(ampl_bin_precision))
         phase_agg = mode_apply(df['phase_season'].round(phase_bin_precision))
@@ -928,16 +976,35 @@ def summary_stats_for_df(df,
 
 def make_phase_plot(water_df,
                     land_df,
-                    obs_water_df,
-                    obs_land_df, 
+                    ampl_observed_water,
+                    phase_observed_water,
+                    ampl_observed_land,
+                    phase_observed_land,
                     agg_method = 'mean',
                     title = r'Diurnal Phase [hr] & Amplitude [$\frac{mm}{day}$] for CMIP6 and IMERG',
                     y_lim = (0, 1),
                     figsize = (13,8),
                     markersize = 2,
-                    textsize = 8,
+                    textsize = 10,
                     normalize_ampl = False,
+                    var_mask_id = None, 
                     ampl_unit_conversion_factor = 1.0):
+    
+    '''
+    
+    Args
+    ----------
+    water_df - xr.Dataframe
+        Dataframe with summary stats for water
+    land_df - xr.Dataframe
+        Dataframe with summary stats for land
+        
+    var_mask_id - 
+    
+    
+    
+    
+    '''
     
     fig = plt.figure(figsize = figsize)
 
@@ -951,11 +1018,11 @@ def make_phase_plot(water_df,
     
     # calculate obs phase mode
     
-    ampl_observed_water, phase_observed_water = summary_stats_for_df(obs_water_df, 
-                                                                     agg_method = agg_method)
+#     ampl_observed_water, phase_observed_water = summary_stats_for_df(obs_water_df, 
+#                                                                      agg_method = agg_method)
     
-    ampl_observed_land, phase_observed_land = summary_stats_for_df(obs_land_df, 
-                                                                   agg_method = agg_method)
+#     ampl_observed_land, phase_observed_land = summary_stats_for_df(obs_land_df, 
+#                                                                    agg_method = agg_method)
     
     
 #     ampl_observed_water = mode_apply(obs_water_df['ampl_season'].round(4))
@@ -1035,9 +1102,9 @@ def make_phase_plot(water_df,
                              weight = 'bold')
 
     ax = plt.gca()
-    ax.text(-.1, ax.get_rmax()/2.,r'Amplitude [$\frac{mm}{day}$]',
-        rotation=90, ha='center',va='center')
-    plt.xlabel('Local Solar Time [Hours]', weight = 'bold')
+#     ax.text(-.1, ax.get_rmax()/2.,r'Amplitude [$\frac{mm}{day}$]',
+#         rotation=90, ha='center',va='center')
+    plt.xlabel('Local Solar Time [hours, LST]', weight = 'bold')
 
     leg = plt.legend(loc = 'center left', bbox_to_anchor=(1.1,0.5), prop={'size': 11}, handlelength = 0, markerscale = 0.8)
 

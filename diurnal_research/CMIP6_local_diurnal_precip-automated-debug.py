@@ -37,13 +37,13 @@ skip_if_folder_exists =  True # used for processing models in parallel
 
 #### params used for paper ####
 
-# cmip_identifier = 'CMIP6'
-# start_date = '1985-01'
-# end_date = '2015-01'
+cmip_identifier = 'CMIP6'
+start_date = '1985-01'
+end_date = '2015-01'
 
-cmip_identifier = 'CMIP5'
-start_date = '1976-01'
-end_date = '2006-01'
+# cmip_identifier = 'CMIP5'
+# start_date = '1976-01'
+# end_date = '2006-01'
 
 
 
